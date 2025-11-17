@@ -1,0 +1,44 @@
+# This file may be used to create an environment using:
+# $ conda create --name <env> --file <this file>
+# platform: linux-64
+# created-by: conda 25.7.0
+# Note: This is a conda requirements file (MatchSpec format)
+# Contains conda package specifications, not pip requirements
+
+pkgs/main::_libgcc_mutex==0.1=main
+pkgs/main::_openmp_mutex==5.1=1_gnu
+pkgs/main::asgiref==3.10.0=py314h06a4308_0
+pkgs/main::bzip2==1.0.8=h5eee18b_6
+pkgs/main::ca-certificates==2025.11.4=h06a4308_0
+pkgs/main::django==5.2.7=py314h06a4308_0
+pkgs/main::expat==2.7.3=h3385a95_0
+pkgs/main::ld_impl_linux-64==2.44=h153f514_2
+pkgs/main::libffi==3.4.4=h6a678d5_1
+pkgs/main::libgcc==15.2.0=h69a1729_7
+pkgs/main::libgcc-ng==15.2.0=h166f726_7
+pkgs/main::libgomp==15.2.0=h4751f2c_7
+pkgs/main::libmpdec==4.0.0=h5eee18b_0
+pkgs/main::libstdcxx==15.2.0=h39759b7_7
+pkgs/main::libstdcxx-ng==15.2.0=hc03a8fd_7
+pkgs/main::libuuid==1.41.5=h5eee18b_0
+pkgs/main::libxcb==1.17.0=h9b100fa_0
+pkgs/main::libzlib==1.3.1=hb25bd0a_0
+pkgs/main::lz4-c==1.9.4=h6a678d5_1
+pkgs/main::ncurses==6.5=h7934f7d_0
+pkgs/main::openssl==3.0.18=hd6dcaed_0
+pkgs/main::pip==25.3=pyh0d26453_0
+pkgs/main::pthread-stubs==0.3=h0ce48e5_1
+pkgs/main::python==3.14.0=h3fc5862_101_cp314
+pkgs/main::python_abi==3.14=1_cp314
+pkgs/main::readline==8.3=hc2a1206_0
+pkgs/main::sqlite==3.51.0=h2a70700_0
+pkgs/main::sqlparse==0.5.2=py314h06a4308_0
+pkgs/main::tk==8.6.15=h54e0aa7_0
+pkgs/main::tzdata==2025b=h04d1e81_0
+pkgs/main::xorg-libx11==1.8.12=h9b100fa_1
+pkgs/main::xorg-libxau==1.0.12=h9b100fa_0
+pkgs/main::xorg-libxdmcp==1.1.5=h9b100fa_0
+pkgs/main::xorg-xorgproto==2024.1=h5eee18b_1
+pkgs/main::xz==5.6.4=h5eee18b_1
+pkgs/main::zlib==1.3.1=hb25bd0a_0
+pkgs/main::zstd==1.5.7=h11fc155_0
