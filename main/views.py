@@ -17,6 +17,6 @@ def dummy_contents(request):
     return http.HttpResponse("Dummy Node")
 
 def dummy_description(request):
-    return http.JsonResponse([{"kind":"in", "channel":"o", "access":"*"},{"kind":"out", "channel":"o", "access":"*"} ], safe=False)
+    return http.JsonResponse([{"kind":"in", "channel":"o", "access":"1"},{"kind":"out", "channel":"o", "access":"*"} ], safe=False)
 
 

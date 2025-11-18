@@ -68,6 +68,24 @@ class IODescription {
 		return res;
 	}
 
+	/**
+	 * @param {"in"|"out"} kind 
+	 * @param {string} name 
+	 * @param {number} count 
+	 */
+	channel_access_valid(kind, name, count) {
+		for (const port of this.ports) {
+			if (port.kind === kind && port.channel === name) {
+				switch (port.access) {
+					case "1": return count === 1;
+					case "1+": return count >= 1;
+					case "*": return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	static parse(raw_obj) {
 		if (typeof raw_obj !== "object") throw new TypeError("IODescription should be an IOPort[]");
 		const ports = [];
@@ -169,6 +187,21 @@ export class NetworkNode extends dataflow.NodeFunction {
 	 * @returns {boolean}
 	 */
 	verify_io() {
+		for (const ch of this.in_channel_names()) {
+			let cnt = 0;
+			for (const _ of this.df_node.inputs(ch)) cnt++;
+			if (!this.io.channel_access_valid("in", ch, cnt) && cnt !== 0) {
+				return false;
+			}
+		}
+		for (const ch of this.out_channel_names()) {
+			let cnt = 0;
+			for (const _ of this.df_node.outputs(ch)) cnt++;
+			if (!this.io.channel_access_valid("out", ch, cnt) && cnt !== 0) {
+				return false;
+			}
+		}
+
 		return true;
 	}
 

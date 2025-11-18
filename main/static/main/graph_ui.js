@@ -293,7 +293,7 @@ export class Node {
 	static connect(input, output) {
 		const df_edge = dataflow.Node.connect(input.to_dataflow(), output.to_dataflow());
 		if (!df_edge) {
-			console.warn(`Could not connect ${input.node.index}@${input.name} -> ${output.node.index}@{output.name}`);
+			console.warn(`Could not connect ${input.node.index}@${input.name} -> ${output.node.index}@${output.name}`);
 			return;
 		}
 		const edge = new Edge(input, output, df_edge);
