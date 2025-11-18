@@ -68,7 +68,7 @@ function init_toolbar() {
 		const net = new NetworkNode("dummy", () => {
 			const df = new dataflow.Node(net);
 			const ui_node = new ui.Node(df);
-			net.post_init(df, ui_node);
+			net.post_init(df, ui_node.content_div);
 		});
 	});
 }
