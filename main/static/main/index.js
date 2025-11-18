@@ -3,6 +3,7 @@ import * as dataflow from "./dataflow.js"
 import * as gpu from "./gpu.js"
 import { ImgSourceNode } from "./img_source_node.js";
 import { ImgViewNode } from "./img_view_node.js";
+import * as ui from "./graph_ui.js";
 
 await gpu.init();
 
@@ -26,10 +27,34 @@ function gaussian_conv(r, sigma) {
 	return df;
 }
 
+function init_toolbar() {
+	const toolbar = document.getElementById("toolbar");
+
+	const img_src_tool = document.createElement("button");
+	img_src_tool.textContent = "ImageSrc";
+	toolbar.appendChild(img_src_tool);
+	img_src_tool.addEventListener("click", () => {
+		const img_src = new ImgSourceNode();
+		const df = new dataflow.Node(img_src);
+		const ui_node = new ui.Node(df);
+		img_src.post_init(df, ui_node.content_div);
+	});
+
+	const img_view_tool = document.createElement("button");
+	img_view_tool.textContent = "ImageView";
+	toolbar.appendChild(img_view_tool);
+	img_view_tool.addEventListener("click", () => {
+		const img_view = new ImgViewNode();
+		const df = new dataflow.Node(img_view);
+		const ui_node = new ui.Node(df);
+		img_view.post_init(df, ui_node.content_div);
+	});
+}
+
+init_toolbar();
+
+
 async function run_test() {
-	const img_src = new ImgSourceNode();
-	const df1 = new dataflow.Node(img_src);
-	img_src.post_init(df1, document.getElementById("img1"));
 
 	const img_view = new ImgViewNode();
 	const df2 = new dataflow.Node(img_view);
@@ -57,4 +82,3 @@ async function run_test() {
 	}
 }
 
-run_test();
