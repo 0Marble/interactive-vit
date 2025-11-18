@@ -115,6 +115,21 @@ export class Tensor {
 	}
 
 	/**
+	 *
+	 * @param {number[]} dims 
+	 * @param {ArrayBuffer | undefined} value 
+	 */
+	resize(dims, value) {
+		const new_tensor = new Tensor(dims, this.elem_size, value)
+
+		this.dims = new_tensor.dims;
+		this.elem_size = new_tensor.elem_size;
+		this.byte_size = new_tensor.byte_size;
+		this.elem_cnt = new_tensor.elem_cnt;
+		this.handle = new_tensor.handle;
+	}
+
+	/**
 	 * @param {number} n 
 	 * @returns {boolean}
 	 */

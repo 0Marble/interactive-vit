@@ -48,12 +48,12 @@ export class Conv2dNode extends dataflow.NodeFunction {
 	 * @param {number|undefined} h 
 	 * @param {number[]|undefined} matrix 
 	 */
-	constructor(w, h, matrix) {
+	constructor() {
 		super();
 
-		this.w = w || 3;
-		this.h = h || 3;
-		this.matrix = matrix || new Float32Array(this.w * this.h);
+		this.w = 3;
+		this.h = 3;
+		this.matrix = new Float32Array(this.w * this.h);
 		this.kernel = new gpu.Kernel(conv2d_src, [new gpu.UniformInfo("cfg", 4 * 4, 3)]);
 		this.matrix_tensor = new gpu.Tensor([this.h, this.w], 4, new Uint8Array(this.matrix.buffer));
 		this.matrix_changed = false;
@@ -95,6 +95,8 @@ export class Conv2dNode extends dataflow.NodeFunction {
 		this.matrix_div.className = "conv_matrix";
 		this.div.appendChild(config_div);
 		this.div.appendChild(this.matrix_div);
+
+		this.resize_matrix(this.w, this.h);
 	}
 
 	resize_matrix(w, h) {
@@ -107,6 +109,8 @@ export class Conv2dNode extends dataflow.NodeFunction {
 		while (this.matrix_div.firstChild) this.matrix_div.firstChild.remove();
 
 		const table = document.createElement("table");
+		dataflow.Context.lock_eval();
+
 		for (let j = 0; j < h; j++) {
 			const row = document.createElement("tr");
 			table.appendChild(row);
@@ -121,14 +125,19 @@ export class Conv2dNode extends dataflow.NodeFunction {
 					this.set_matrix_element(i, j, +input.value);
 				});
 				data.appendChild(input);
+				this.set_matrix_element(i, j, 0);
 			}
 		}
 		this.matrix_div.appendChild(table);
+
+		dataflow.Context.unlock_eval();
 	}
 
 	set_matrix_element(i, j, x) {
 		this.matrix_changed = true;
 		this.matrix[j * this.w + i] = x;
+
+		if (this.df_node) this.df_node.on_upstream_change();
 	}
 
 	/**
@@ -200,7 +209,7 @@ export class Conv2dNode extends dataflow.NodeFunction {
 
 		if (this.matrix_changed) {
 			this.matrix_changed = false;
-			this.matrix_tensor.from_cpu(this.matrix.buffer);
+			this.matrix_tensor = new gpu.Tensor([this.h, this.w], 4, new Uint8Array(this.matrix.buffer));
 		}
 
 		this.kernel.run([
