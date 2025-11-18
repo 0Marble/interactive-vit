@@ -184,6 +184,8 @@ export class Node {
 		const remove = document.createElement("button");
 		remove.textContent = "x";
 		remove.addEventListener("click", () => {
+			dataflow.Context.lock_eval();
+
 			for (const port of this.ins.values()) {
 				for (const edge of port) edge.remove();
 			}
@@ -193,6 +195,8 @@ export class Node {
 			this.div.remove();
 			this.n.destroy();
 			Node.all_nodes.delete(this);
+
+			dataflow.Context.unlock_eval();
 		});
 
 		right_group.appendChild(remove);

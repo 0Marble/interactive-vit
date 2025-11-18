@@ -37,6 +37,8 @@ export class Edge {
 	 * @fires Node#on_upstream_change
 	 */
 	disconnect() {
+		if (!Context.can_edit()) return;
+
 		console.debug(`disconnect(${this.index})`);
 		this.in_port.node.outs.get(this.in_port.channel).delete(this);
 		this.out_port.node.ins.get(this.out_port.channel).delete(this);
@@ -147,6 +149,47 @@ export class NodeFunction {
 	}
 }
 
+export class Context {
+	static instance = new Context();
+
+	constructor() {
+		this.edit_lock = 0;
+		this.eval_lock = false;
+		/**
+		 * @type {Set<Node>}
+		 */
+		this.eval_later = new Set();
+	}
+
+	static can_edit() {
+		return Context.instance.edit_lock === 0;
+	}
+	static acquire_edit_lock() {
+		Context.instance.edit_lock++;
+	}
+	static release_edit_lock() {
+		Context.instance.edit_lock--;
+		if (Context.instance.edit_lock < 0) {
+			Context.instance.edit_lock = 0;
+			console.warn("edit_lock went below 0");
+		}
+		if (Context.instance.edit_lock === 0) {
+			console.debug("edit_lock fully released");
+		}
+	}
+
+	static lock_eval() {
+		Context.instance.eval_lock = true;
+	}
+	static unlock_eval() {
+		Context.instance.eval_lock = false;
+		for (const node of Context.instance.eval_later.values()) {
+			node.on_upstream_change();
+		}
+		Context.instance.eval_later.clear();
+	}
+}
+
 export class Node {
 	static counter = 0;
 	/**
@@ -222,6 +265,8 @@ export class Node {
 	 * @fires Node#on_upstream_change
 	 */
 	destroy() {
+		if (!Context.can_edit()) return;
+
 		Node.all_nodes.delete(this);
 
 		for (const edge of this.inputs()) {
@@ -256,6 +301,11 @@ export class Node {
 	 * 3. Recursively call `eval` on `impl`'s parents
 	 */
 	on_upstream_change() {
+		if (Context.instance.eval_lock) {
+			Context.instance.eval_later.add(this);
+			return;
+		}
+
 		console.debug(`on_upstream_change(${this.index})`);
 		/**
 		 * @type {Set<Node>}
@@ -295,6 +345,8 @@ export class Node {
 	 * @fires Node#on_upstream_change
 	 */
 	static connect(in_port, out_port) {
+		if (!Context.can_edit()) return;
+
 		if (in_port.node == out_port.node || in_port.dir !== "out" || out_port.dir !== "in") {
 			return undefined;
 		}

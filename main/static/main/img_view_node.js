@@ -125,6 +125,9 @@ export class ImgViewNode extends dataflow.NodeFunction {
 
 	move_buffer_to_canvas() {
 		const size = this.buf.as_2d_size();
+
+		dataflow.Context.acquire_edit_lock();
+
 		this.buf.to_cpu().then((buf) => {
 			const rgba = new Uint8Array(buf);
 			const img = this.ctx.createImageData(size.w, size.h);
@@ -132,6 +135,7 @@ export class ImgViewNode extends dataflow.NodeFunction {
 				img.data[i] = rgba[i];
 			}
 			this.ctx.putImageData(img, 0, 0);
+			dataflow.Context.release_edit_lock();
 		});
 	}
 
