@@ -138,10 +138,54 @@ class Message {
 	 * @param {string} endpoint 
 	 */
 	async send(endpoint) {
-		// sending a stream of packets:
+		const buf = await this.encode();
+		this.all_tensors = [];
+		await this.decode(buf);
+	}
+
+	/**
+	 * @param {ArrayBuffer} buffer 
+	 */
+	async decode(buffer) {
+		const view = new DataView(buffer);
+		let offset = 0;
+
+		const num_packets = view.getUint32(offset);
+		offset += 4;
+		this.all_tensors = [];
+
+		for (let i = 0; i < num_packets; i++) {
+			const channel_len = view.getUint32(offset);
+			offset += 4;
+			const str = new TextDecoder().decode(new Uint8Array(buffer, offset, channel_len));
+			offset += channel_len;
+
+			offset = add_padding(offset, 4);
+			const dim_cnt = view.getUint32(offset);
+			offset += 4;
+			const dims_array = new Uint32Array(buffer, offset, dim_cnt);
+			const dims = []
+			let elem_cnt = 1;
+			for (const d of dims_array) {
+				dims.push(d);
+				elem_cnt *= d;
+			}
+			offset += 4 * dim_cnt;
+			const data = new Float32Array(buffer, offset, elem_cnt);
+			offset += 4 * elem_cnt;
+
+			const tensor = new gpu.Tensor(dims, 4);
+			tensor.from_cpu(data);
+			this.all_tensors.push({ channel: str, tensor });
+
+		}
+	}
+
+	async encode() {
+		// [num_packets | packet1 | packet2 .... ]
 		// [ channel_len (u32, utf8) | channel (utf8) | n_dims (u32) | dims (u32) | data (f32) ]
 
-		let byte_size = 0;
+		let byte_size = 4;
 		const offsets = [];
 		const promises = []
 		for (let i = 0; i < this.all_tensors.length; i++) {
@@ -151,10 +195,9 @@ class Message {
 			const enc = new TextEncoder();
 			byte_size += 4;
 			byte_size += enc.encode(t.channel).length;
+			byte_size = add_padding(byte_size, 4);
 			byte_size += 4;
-			byte_size = add_padding(byte_size, 4);
 			byte_size += 4 * t.tensor.dims.length;
-			byte_size = add_padding(byte_size, 4);
 			byte_size += 4 * t.tensor.elem_cnt;
 			promises.push(t.tensor.to_cpu().then(buf => { return { buf, i }; }));
 		}
@@ -163,6 +206,7 @@ class Message {
 		const buffer = new ArrayBuffer(byte_size);
 		const view = new DataView(buffer);
 		const buffers = await Promise.all(promises);
+		view.setUint32(0, this.all_tensors.length);
 
 		for (const t of buffers) {
 			let offset = offsets[t.i];
@@ -176,18 +220,18 @@ class Message {
 			new Uint8Array(buffer, offset, enc.length).set(enc);
 			offset += enc.length;
 
+			offset = add_padding(offset, 4);
 			view.setUint32(offset, dims.length);
-			offset = add_padding(offset + 4, 4);
+			offset += 4;
 			new Uint32Array(buffer, offset, dims.length).set(dims);
 			offset += 4 * dims.length;
-
-			offset = add_padding(offset, 4);
 			new Float32Array(buffer, offset, elem_cnt).set(new Float32Array(t.buf));
 			offset += 4 * elem_cnt;
 
 			console.assert(offset === offsets[t.i + 1]);
 		}
 
+		return buffer;
 	}
 }
 
@@ -210,9 +254,9 @@ export class NetworkNode extends dataflow.NodeFunction {
 		this.io = null;
 		/**
 		 *
-		 * @type {Map<string, gpu.Tensor>}
+		 * @type {Map<string, gpu.Tensor> | undefined}
 		 */
-		this.outs = new Map();
+		this.outs = undefined;
 
 		fetch(`${endpoint}/description`, { method: "GET" })
 			.then(resp => resp.json())
@@ -280,7 +324,7 @@ export class NetworkNode extends dataflow.NodeFunction {
 	 * @virtual
 	 */
 	on_upstream_change() {
-		this.outs.clear();
+		this.outs = undefined;
 	}
 
 	/**
@@ -288,11 +332,15 @@ export class NetworkNode extends dataflow.NodeFunction {
 	 * @returns {boolean}
 	 */
 	eval() {
+		console.debug(`NetworkNode.eval(${this.df_node.index})`)
+		if (this.outs) return true;
+		this.outs = new Map();
+
 		const msg = new Message();
 		for (const edge of this.df_node.inputs()) {
 			const tensor = edge.read_packet();
 			if (!tensor) return false;
-			msg.add_tensor(edge.in_port.channel, tensor);
+			msg.add_tensor(edge.out_port.channel, tensor);
 		}
 
 		dataflow.Context.acquire_edit_lock();
@@ -303,12 +351,13 @@ export class NetworkNode extends dataflow.NodeFunction {
 				this.outs.set(ch, t);
 			}
 			dataflow.Context.release_edit_lock();
+			this.df_node.on_this_changed();
 		}).catch(err => {
 			console.warn("Evaluation error:", err);
 			this.retry_eval()
 		});
 
-		return false;
+		return true;
 	}
 
 	retry_eval() {
@@ -343,7 +392,11 @@ export class NetworkNode extends dataflow.NodeFunction {
 	 * @returns {undefined | any }
 	 */
 	read_packet(channel) {
-		return this.outs.get(channel);
+		if (this.outs) {
+			const t = this.outs.get(channel);
+			return t;
+		}
+		return undefined;
 	}
 
 }
