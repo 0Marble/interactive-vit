@@ -49,36 +49,17 @@ function init_toolbar() {
 		const ui_node = new ui.Node(df);
 		img_view.post_init(df, ui_node.content_div);
 	});
+
+	const conv2d_tool = document.createElement("button");
+	conv2d_tool.textContent = "Conv2D";
+	toolbar.appendChild(conv2d_tool);
+	conv2d_tool.addEventListener("click", () => {
+		const conv2d = new Conv2dNode();
+		const df = new dataflow.Node(conv2d);
+		const ui_node = new ui.Node(df);
+		conv2d.post_init(df, ui_node.content_div);
+	});
 }
 
 init_toolbar();
-
-
-async function run_test() {
-
-	const img_view = new ImgViewNode();
-	const df2 = new dataflow.Node(img_view);
-	img_view.post_init(df2, document.getElementById("img2"));
-
-	const df3 = gaussian_conv(7, 3.0);
-
-	const edges = []
-	for (const dim of ["R", "G", "B"]) {
-		await new Promise(r => setTimeout(r, 5 * 1000));
-		const e = dataflow.Node.connect(new dataflow.Port(df1, dim, "out"), new dataflow.Port(df2, dim, "in"));
-		edges.push(e);
-	}
-
-	for (const e of edges) {
-		await new Promise(r => setTimeout(r, 1 * 1000));
-		e.disconnect();
-	}
-
-	await new Promise(r => setTimeout(r, 1 * 1000));
-	dataflow.Node.connect(new dataflow.Port(df1, "R", "out"), new dataflow.Port(df3, "o", "in"));
-	for (const dim of ["R", "G", "B"]) {
-		await new Promise(r => setTimeout(r, 1 * 1000));
-		dataflow.Node.connect(new dataflow.Port(df3, "o", "out"), new dataflow.Port(df2, dim, "in"));
-	}
-}
 

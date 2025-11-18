@@ -56,14 +56,88 @@ export class Conv2dNode extends dataflow.NodeFunction {
 		this.matrix = matrix || new Float32Array(this.w * this.h);
 		this.kernel = new gpu.Kernel(conv2d_src, [new gpu.UniformInfo("cfg", 4 * 4, 3)]);
 		this.matrix_tensor = new gpu.Tensor([this.h, this.w], 4, new Uint8Array(this.matrix.buffer));
+		this.matrix_changed = false;
+
+		this.init_matrix();
+	}
+
+	init_matrix() {
+		this.div = document.createElement("div");
+		const config_div = document.createElement("div");
+		config_div.className = "conv_config";
+
+		const label = document.createElement("label");
+		label.textContent = "Size:";
+		config_div.appendChild(label);
+		const inputs = []
+		const dim_count = 2;
+		const dims = [this.w, this.h];
+		for (let i = 0; i < dim_count; i++) {
+			const input = document.createElement("input");
+			input.type = "number";
+			config_div.appendChild(input);
+			input.value = `${dims[i]}`;
+			input.addEventListener("change", () => {
+				const width = +inputs[0].value;
+				const height = +inputs[1].value;
+				this.resize_matrix(width, height);
+			});
+
+			if (i + 1 !== dim_count) {
+				const x = document.createElement("span");
+				x.textContent = "x";
+				config_div.appendChild(x);
+			}
+			inputs.push(input);
+		}
+
+		this.matrix_div = document.createElement("div");
+		this.matrix_div.className = "conv_matrix";
+		this.div.appendChild(config_div);
+		this.div.appendChild(this.matrix_div);
+	}
+
+	resize_matrix(w, h) {
+		this.w = w;
+		this.h = h;
+
+		this.matrix = new Float32Array(w * h);
+		this.matrix_changed = true;
+
+		while (this.matrix_div.firstChild) this.matrix_div.firstChild.remove();
+
+		const table = document.createElement("table");
+		for (let j = 0; j < h; j++) {
+			const row = document.createElement("tr");
+			table.appendChild(row);
+			for (let i = 0; i < w; i++) {
+				const data = document.createElement("td");
+				row.appendChild(data);
+				const input = document.createElement("input");
+				input.className = "matrix_entry";
+				input.type = "number";
+				input.value = this.matrix[j * w + i];
+				input.addEventListener("change", () => {
+					this.set_matrix_element(i, j, +input.value);
+				});
+				data.appendChild(input);
+			}
+		}
+		this.matrix_div.appendChild(table);
+	}
+
+	set_matrix_element(i, j, x) {
+		this.matrix_changed = true;
+		this.matrix[j * this.w + i] = x;
 	}
 
 	/**
 	 *
 	 * @param {dataflow.Node} df_node 
 	 */
-	post_init(df_node) {
+	post_init(df_node, parent_div) {
 		this.df_node = df_node;
+		parent_div.appendChild(this.div);
 	}
 
 	/**
@@ -123,6 +197,11 @@ export class Conv2dNode extends dataflow.NodeFunction {
 			4,
 		);
 		this.kernel.set_uniform("cfg", new Uint32Array([size.w, size.h, this.w, this.h]).buffer);
+
+		if (this.matrix_changed) {
+			this.matrix_changed = false;
+			this.matrix_tensor.from_cpu(this.matrix.buffer);
+		}
 
 		this.kernel.run([
 			{ binding: 0, tensor: packet },
