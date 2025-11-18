@@ -181,6 +181,22 @@ export class Node {
 		label.textContent = `Node ${this.index}`;
 		left_group.appendChild(label);
 
+		const remove = document.createElement("button");
+		remove.textContent = "x";
+		remove.addEventListener("click", () => {
+			for (const port of this.ins.values()) {
+				for (const edge of port) edge.remove();
+			}
+			for (const port of this.outs.values()) {
+				for (const edge of port) edge.remove();
+			}
+			this.div.remove();
+			this.n.destroy();
+			Node.all_nodes.delete(this);
+		});
+
+		right_group.appendChild(remove);
+
 		return header;
 	}
 
@@ -273,7 +289,7 @@ export class Node {
 	static connect(input, output) {
 		const df_edge = dataflow.Node.connect(input.to_dataflow(), output.to_dataflow());
 		if (!df_edge) {
-			console.debug(`Could not connect ${input.node.index}@${input.name} -> ${output.node.index}@{output.name}`);
+			console.warn(`Could not connect ${input.node.index}@${input.name} -> ${output.node.index}@{output.name}`);
 			return;
 		}
 		const edge = new Edge(input, output, df_edge);
