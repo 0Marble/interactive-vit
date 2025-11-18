@@ -44,6 +44,11 @@ export class Edge {
 		this.out_port.node.ins.get(this.out_port.channel).delete(this);
 		this.out_port.node.on_upstream_change();
 	}
+
+	read_packet() {
+		return this.in_port.node.impl.read_packet(this.in_port.channel);
+	}
+
 }
 
 /**

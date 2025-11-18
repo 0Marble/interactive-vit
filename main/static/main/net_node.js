@@ -95,6 +95,108 @@ class IODescription {
 
 }
 
+class Message {
+	constructor() {
+		/**
+		 * @type {{tensor:gpu.Tensor, channel:string}[]}
+		 */
+		this.all_tensors = [];
+	}
+
+	/**
+	 * @param {string} channel 
+	 * @param {gpu.Tensor} tensor 
+	 */
+	add_tensor(channel, tensor) {
+		this.all_tensors.push({ tensor, channel });
+	}
+
+	/**
+	 * @returns {number}
+	 */
+	get_tensor_count() {
+		return this.all_tensors.length;
+	}
+
+	/**
+	 * @param {number} n 
+	 * @returns {gpu.Tensor}
+	 */
+	get_nth_tensor(n) {
+		return this.all_tensors[n].tensor;
+	}
+
+	/**
+	 * @param {number} n 
+	 * @returns {string}
+	 */
+	get_nth_channel(n) {
+		return this.all_tensors[n].channel;
+	}
+
+	/**
+	 * @param {string} endpoint 
+	 */
+	async send(endpoint) {
+		// sending a stream of packets:
+		// [ channel_len (u32, utf8) | channel (utf8) | n_dims (u32) | dims (u32) | data (f32) ]
+
+		let byte_size = 0;
+		const offsets = [];
+		const promises = []
+		for (let i = 0; i < this.all_tensors.length; i++) {
+			offsets.push(byte_size);
+			const t = this.all_tensors[i];
+
+			const enc = new TextEncoder();
+			byte_size += 4;
+			byte_size += enc.encode(t.channel).length;
+			byte_size += 4;
+			byte_size = add_padding(byte_size, 4);
+			byte_size += 4 * t.tensor.dims.length;
+			byte_size = add_padding(byte_size, 4);
+			byte_size += 4 * t.tensor.elem_cnt;
+			promises.push(t.tensor.to_cpu().then(buf => { return { buf, i }; }));
+		}
+		offsets.push(byte_size);
+
+		const buffer = new ArrayBuffer(byte_size);
+		const view = new DataView(buffer);
+		const buffers = await Promise.all(promises);
+
+		for (const t of buffers) {
+			let offset = offsets[t.i];
+			const dims = this.all_tensors[t.i].tensor.dims;
+			const channel = this.all_tensors[t.i].channel;
+			const elem_cnt = this.all_tensors[t.i].tensor.elem_cnt;
+
+			const enc = new TextEncoder().encode(channel);
+			view.setUint32(offset, enc.length);
+			offset += 4;
+			new Uint8Array(buffer, offset, enc.length).set(enc);
+			offset += enc.length;
+
+			view.setUint32(offset, dims.length);
+			offset = add_padding(offset + 4, 4);
+			new Uint32Array(buffer, offset, dims.length).set(dims);
+			offset += 4 * dims.length;
+
+			offset = add_padding(offset, 4);
+			new Float32Array(buffer, offset, elem_cnt).set(new Float32Array(t.buf));
+			offset += 4 * elem_cnt;
+
+			console.assert(offset === offsets[t.i + 1]);
+		}
+
+	}
+}
+
+function add_padding(offset, align) {
+	const m = offset % align;
+	if (m === 0) return offset;
+	return offset + align - m;
+}
+
 export class NetworkNode extends dataflow.NodeFunction {
 
 	/**
@@ -106,6 +208,11 @@ export class NetworkNode extends dataflow.NodeFunction {
 		this.endpoint = endpoint;
 		this.div = document.createElement("div");
 		this.io = null;
+		/**
+		 *
+		 * @type {Map<string, gpu.Tensor>}
+		 */
+		this.outs = new Map();
 
 		fetch(`${endpoint}/description`, { method: "GET" })
 			.then(resp => resp.json())
@@ -172,14 +279,39 @@ export class NetworkNode extends dataflow.NodeFunction {
 	/**
 	 * @virtual
 	 */
-	on_upstream_change() { }
+	on_upstream_change() {
+		this.outs.clear();
+	}
 
 	/**
 	 * @virtual
 	 * @returns {boolean}
 	 */
 	eval() {
+		const msg = new Message();
+		for (const edge of this.df_node.inputs()) {
+			const tensor = edge.read_packet();
+			if (!tensor) return false;
+			msg.add_tensor(edge.in_port.channel, tensor);
+		}
+
+		dataflow.Context.acquire_edit_lock();
+		msg.send(this.endpoint).then(() => {
+			for (let i = 0; i < msg.get_tensor_count(); i++) {
+				const t = msg.get_nth_tensor(i);
+				const ch = msg.get_nth_channel(i);
+				this.outs.set(ch, t);
+			}
+			dataflow.Context.release_edit_lock();
+		}).catch(err => {
+			console.warn("Evaluation error:", err);
+			this.retry_eval()
+		});
+
 		return false;
+	}
+
+	retry_eval() {
 	}
 
 	/**
@@ -210,8 +342,8 @@ export class NetworkNode extends dataflow.NodeFunction {
 	 * @param {string} channel 
 	 * @returns {undefined | any }
 	 */
-	read_packet(_channel) {
-		return undefined;
+	read_packet(channel) {
+		return this.outs.get(channel);
 	}
 
 }
