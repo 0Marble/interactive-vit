@@ -6,7 +6,7 @@ import { ImgViewNode } from "./img_view_node.js";
 
 await gpu.init();
 
-const csrf_token = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+// const csrf_token = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
 
 function gaussian_conv(r, sigma) {
 	const n = r * 2 + 1;
