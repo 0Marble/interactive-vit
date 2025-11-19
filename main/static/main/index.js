@@ -8,7 +8,6 @@ import { NetworkNode } from "./net_node.js";
 
 await gpu.init();
 
-// const csrf_token = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
 
 function init_toolbar() {
 	const toolbar = document.getElementById("toolbar");

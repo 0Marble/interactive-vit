@@ -1,6 +1,7 @@
 
 import * as dataflow from "./dataflow.js";
 import * as gpu from "./gpu.js";
+import * as csrf from "./csrf.js";
 
 /*
  * This node will do opaque calculations on the server
@@ -139,8 +140,19 @@ class Message {
 	 */
 	async send(endpoint) {
 		const buf = await this.encode();
+
+		const resp = await fetch(`${endpoint}/compute`, {
+			method: "POST",
+			body: buf,
+			headers: {
+				'Content-Type': 'application/octet-stream',
+				'X-CSRFToken': csrf.get_csrf_token(),
+			}
+		});
+
+		const result = await resp.bytes()
 		this.all_tensors = [];
-		await this.decode(buf);
+		await this.decode(result.buffer);
 	}
 
 	/**
@@ -224,6 +236,8 @@ class Message {
 			view.setUint32(offset, dims.length);
 			offset += 4;
 			new Uint32Array(buffer, offset, dims.length).set(dims);
+			console.debug(buffer.slice(offset, offset + dims.length * 4))
+
 			offset += 4 * dims.length;
 			new Float32Array(buffer, offset, elem_cnt).set(new Float32Array(t.buf));
 			offset += 4 * elem_cnt;
