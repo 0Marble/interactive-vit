@@ -149,6 +149,9 @@ class Message {
 				'X-CSRFToken': csrf.get_csrf_token(),
 			}
 		});
+		if (!resp.ok) {
+			throw new Error("Something went wrong while computing on the server")
+		}
 
 		const result = await resp.bytes()
 		this.all_tensors = [];

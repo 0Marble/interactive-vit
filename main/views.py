@@ -26,7 +26,11 @@ def dummy_compute(request: http.HttpRequest):
         msg = Message()
         msg.decode(request.body)
 
-        # do some processing
+        ch, dims, data = msg.tensors[0]
+        t = torch.tensor(data).reshape(dims.tolist())
+        t = torch.cos(t)
+        data.clear()
+        data.frombytes(t.numpy().tobytes())
 
         res = msg.encode()
         return http.HttpResponse(res)
@@ -72,7 +76,6 @@ class Message:
         for i in range(0, num_packets):
             channel_len = int.from_bytes(reader.read(4), byteorder=network, signed=False)
             channel = reader.read(channel_len).decode(encoding="utf8")
-            logger.warn(f"{i}: channel={channel}")
             
             padding = channel_len % 4
             if padding != 0: padding = 4 - padding
