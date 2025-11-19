@@ -150,7 +150,7 @@ class Message {
 			}
 		});
 		if (!resp.ok) {
-			throw new Error("Something went wrong while computing on the server")
+			throw new Error(await resp.text())
 		}
 
 		const result = await resp.bytes()
@@ -354,10 +354,17 @@ export class NetworkNode extends dataflow.NodeFunction {
 		this.outs = new Map();
 
 		const msg = new Message();
-		for (const edge of this.df_node.inputs()) {
-			const tensor = edge.read_packet();
-			if (!tensor) return false;
-			msg.add_tensor(edge.out_port.channel, tensor);
+		for (const ch of this.df_node.in_channel_names()) {
+			let cnt = 0;
+			for (const edge of this.df_node.inputs(ch)) {
+				const tensor = edge.read_packet();
+				if (!tensor) return false;
+				msg.add_tensor(edge.out_port.channel, tensor);
+				cnt++;
+			}
+			if (!this.io.channel_access_valid("in", ch, cnt)) {
+				return false;
+			}
 		}
 
 		dataflow.Context.acquire_edit_lock();
