@@ -42,7 +42,7 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
 }
 `;
 
-export class Conv2dNode extends dataflow.NodeFunction {
+export class Conv2dNode extends dataflow.Node {
 	/**
 	 * @param {number|undefined} w 
 	 * @param {number|undefined} h 
@@ -96,10 +96,12 @@ export class Conv2dNode extends dataflow.NodeFunction {
 		this.div.appendChild(config_div);
 		this.div.appendChild(this.matrix_div);
 
-		this.resize_matrix(this.w, this.h);
+		console.assert(this.resize_matrix(this.w, this.h));
 	}
 
 	resize_matrix(w, h) {
+		if (!dataflow.Context.can_edit()) return false;
+
 		this.w = w;
 		this.h = h;
 
@@ -108,8 +110,8 @@ export class Conv2dNode extends dataflow.NodeFunction {
 
 		while (this.matrix_div.firstChild) this.matrix_div.firstChild.remove();
 
-		const table = document.createElement("table");
 		dataflow.Context.lock_eval();
+		const table = document.createElement("table");
 
 		for (let j = 0; j < h; j++) {
 			const row = document.createElement("tr");
@@ -129,23 +131,21 @@ export class Conv2dNode extends dataflow.NodeFunction {
 			}
 		}
 		this.matrix_div.appendChild(table);
-
 		dataflow.Context.unlock_eval();
+
+		return true;
 	}
 
 	set_matrix_element(i, j, x) {
+		if (!dataflow.Context.can_edit()) return false;
+		this.invalidate_with_descendants();
 		this.matrix_changed = true;
 		this.matrix[j * this.w + i] = x;
-
-		if (this.df_node) this.df_node.on_upstream_change();
+		this.eval_with_descendants();
+		return true;
 	}
 
-	/**
-	 *
-	 * @param {dataflow.Node} df_node 
-	 */
-	post_init(df_node, parent_div) {
-		this.df_node = df_node;
+	post_init(parent_div) {
 		parent_div.appendChild(this.div);
 	}
 
@@ -168,35 +168,31 @@ export class Conv2dNode extends dataflow.NodeFunction {
 	/**
 	 * @override
 	 */
-	on_upstream_change() {
+	invalidate_impl() {
 		this.buf = undefined;
 	}
 
 	/**
 	 * @override
-	 * @returns {boolean}
 	 */
-	eval() {
-		console.log(`Conv2dNode.eval(${this.df_node.index})`);
+	async eval_impl() {
+		console.log(`Conv2dNode.eval(${this.format()})`);
 		if (this.buf) {
+			this.emit_result("o", this.buf);
 			return true;
 		}
 		/**
 		 * @type {dataflow.Edge}
 		 */
-		const edge = this.df_node.inputs().next().value;
+		const edge = this.inputs().next().value;
 		if (!edge) return false;
 
-		const prev = edge.in_port.node;
-		if (!prev.impl.eval()) return false;
-		/**
-		 * @type {gpu.Tensor}
-		 */
-		const packet = prev.impl.read_packet(edge.in_port.channel);
+		const packet = await edge.read_packet(edge.in_port.channel);
 		if (!packet) return false;
 		const size = packet.as_2d_size();
 		if (!size) {
-			console.error(`Only 2d convolutions supported (node ${this.df_node.index})`);
+			console.error(`Only 2d convolutions supported (node ${this.format()})`);
+			return false;
 		}
 		this.buf = new gpu.Tensor(
 			[
@@ -218,30 +214,19 @@ export class Conv2dNode extends dataflow.NodeFunction {
 			{ binding: 2, tensor: this.buf },
 		], Math.ceil(this.buf.elem_cnt / 64));
 
-
 		return true;
 	}
 
 	/**
 	 * @override
-	 * @returns {boolean}
 	 */
-	verify_io() {
+	verify(_dir, _channel) {
 		let len = 0;
-		for (const _ of this.df_node.inputs()) {
+		for (const _ of this.inputs()) {
 			len += 1;
 		}
 		if (len > 1) return false;
 		return true;
-	}
-
-	/**
-	 * @override
-	 * @param {string} channel 
-	 * @returns {undefined | any }
-	 */
-	read_packet(channel) {
-		return this.buf;
 	}
 }
 

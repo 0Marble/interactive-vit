@@ -3,7 +3,7 @@ import * as gpu from "./gpu.js";
 import * as ui from "./graph_ui.js";
 
 import { ImgSourceNode } from "./img_source_node.js";
-// import { Conv2dNode } from "./conv2d_node.js";
+import { Conv2dNode } from "./conv2d_node.js";
 import { ImgViewNode } from "./img_view_node.js";
 // import { NetworkNode } from "./net_node.js";
 
@@ -30,17 +30,16 @@ function init_toolbar() {
 		const ui_node = new ui.Node(img_view);
 		img_view.post_init(ui_node.content_div);
 	});
-	//
-	// const conv2d_tool = document.createElement("button");
-	// conv2d_tool.textContent = "Conv2D";
-	// toolbar.appendChild(conv2d_tool);
-	// conv2d_tool.addEventListener("click", () => {
-	// 	const conv2d = new Conv2dNode();
-	// 	const df = new dataflow.Node(conv2d);
-	// 	const ui_node = new ui.Node(df);
-	// 	conv2d.post_init(df, ui_node.content_div);
-	// });
-	//
+
+	const conv2d_tool = document.createElement("button");
+	conv2d_tool.textContent = "Conv2D";
+	toolbar.appendChild(conv2d_tool);
+	conv2d_tool.addEventListener("click", () => {
+		const conv2d = new Conv2dNode();
+		const ui_node = new ui.Node(conv2d);
+		conv2d.post_init(ui_node.content_div);
+	});
+
 	// const net_tool = document.createElement("button");
 	// net_tool.textContent = "DummyNet"
 	// toolbar.appendChild(net_tool);
