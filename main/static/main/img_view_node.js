@@ -34,7 +34,7 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
 }
 `;
 
-export class ImgViewNode extends dataflow.NodeFunction {
+export class ImgViewNode extends dataflow.Node {
 	constructor() {
 		super();
 
@@ -51,35 +51,24 @@ export class ImgViewNode extends dataflow.NodeFunction {
 		this.buf = undefined;
 	}
 
-	/**
-	 * @param {dataflow.Node} df_node 
-	 */
-	post_init(df_node, parent_div) {
-		this.df_node = df_node;
+	post_init(parent_div) {
 		parent_div.appendChild(this.div);
 	}
 
 	/**
-	 * For `impl` in `dataflow.Node`
 	 * @override 
 	 */
-	eval() {
-		console.debug(`ImgViewNode.eval(${this.df_node.index})`);
+	async eval_impl() {
+		console.debug(`ImgViewNode.eval(${this.format()})`);
 		if (this.buf) return true;
 
 		let size = undefined;
-		for (const edge of this.df_node.inputs()) {
-			const prev = edge.in_port.node;
-			if (!prev.impl.eval()) {
-				return false;
-			}
-			/**
-			 * @type {undefined | gpu.Tensor}
-			 */
-			const packet = prev.impl.read_packet(edge.in_port.channel);
+		for (const edge of this.inputs()) {
+			const packet = await edge.read_packet(edge.in_port.channel);
 			if (!packet) return false;
+
 			if (packet.dims.length !== 2) {
-				console.error(`Invalid input on ImgViewNode (node ${this.df_node.index}). Expected a 2d buffer`);
+				console.error(`Invalid input on ImgViewNode ${this.format()}. Expected a 2d buffer`);
 				return false;
 			}
 			const w = packet.dims[1];
@@ -87,7 +76,7 @@ export class ImgViewNode extends dataflow.NodeFunction {
 			if (!size) {
 				size = { w, h };
 			} else if (size.w != w || size.h != h) {
-				console.error(`Inconsistent input sizes on ImgViewNode (node ${this.df_node.index})`);
+				console.error(`Inconsistent input sizes on ImgViewNode ${this.format()}`);
 				return false;
 			}
 		}
@@ -100,9 +89,8 @@ export class ImgViewNode extends dataflow.NodeFunction {
 		this.canvas.height = size.h;
 
 		this.buf = new gpu.Tensor([size.h, size.w], 4);
-		for (const edge of this.df_node.inputs()) {
-			const prev = edge.in_port.node;
-			const packet = prev.impl.read_packet(edge.in_port.channel);
+		for (const edge of this.inputs()) {
+			const packet = await edge.read_packet(edge.in_port.channel);
 			let cfg = null;
 			switch (edge.out_port.channel) {
 				case "R": cfg = new Uint32Array([0, 0x000000FF, 0, 0]); break;
@@ -118,17 +106,18 @@ export class ImgViewNode extends dataflow.NodeFunction {
 				],
 				Math.ceil(this.buf.elem_cnt / 64),
 			);
-			this.move_buffer_to_canvas();
+
+			await this.move_buffer_to_canvas();
 		}
 		return true;
 	}
 
-	move_buffer_to_canvas() {
+	async move_buffer_to_canvas() {
 		const size = this.buf.as_2d_size();
 
 		dataflow.Context.acquire_edit_lock();
 
-		this.buf.to_cpu().then((buf) => {
+		await this.buf.to_cpu().then((buf) => {
 			const rgba = new Uint8Array(buf);
 			const img = this.ctx.createImageData(size.w, size.h);
 			for (let i = 0; i < size.w * size.h * 4; i++) {
@@ -142,7 +131,7 @@ export class ImgViewNode extends dataflow.NodeFunction {
 	/**
 	 * @override
 	 */
-	on_upstream_change() {
+	invalidate_impl() {
 		this.buf = undefined;
 		this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 	}

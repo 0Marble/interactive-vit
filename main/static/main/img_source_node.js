@@ -20,10 +20,8 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
 }
 `;
 
-export class ImgSourceNode extends dataflow.NodeFunction {
-	static counter = 0;
+export class ImgSourceNode extends dataflow.Node {
 	constructor() {
-		ImgSourceNode.counter += 1;
 		super();
 
 		this.div = document.createElement("div");
@@ -36,6 +34,7 @@ export class ImgSourceNode extends dataflow.NodeFunction {
 		this.ctx = this.canvas.getContext("2d");
 		this.div.appendChild(input);
 		this.div.appendChild(this.canvas);
+		this.has_img = false;
 
 		input.addEventListener("change", () => {
 			const file = input.files[0];
@@ -54,21 +53,32 @@ export class ImgSourceNode extends dataflow.NodeFunction {
 		this.bufs = undefined;
 	}
 
-	/**
-	 * @param {dataflow.Node} df_node 
-	 */
-	post_init(df_node, parent_div) {
-		this.df_node = df_node;
+	post_init(parent_div) {
 		parent_div.appendChild(this.div);
 	}
 
 	/**
 	 * When an image is loaded, it is drawn onto the `this.canvas`,
 	 * then, this is called.
-	 * 1. Runs the required kernels 
-	 * 2. Does a `dataflow.Node.on_upstream_change()`.
 	 */
 	on_image_loaded() {
+		this.has_img = true;
+		dataflow.Context.acquire_edit_lock();
+		this.eval_with_descendants().then(() => dataflow.Context.release_edit_lock());
+	}
+
+	/**
+	 * @override 
+	 */
+	async eval_impl() {
+		if (!this.has_img) return false;
+		if (this.bufs) {
+			this.emit_result("R", this.bufs[1]);
+			this.emit_result("G", this.bufs[2]);
+			this.emit_result("B", this.bufs[3]);
+			return true;
+		}
+
 		const img_data = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
 
 		this.bufs = [
@@ -81,39 +91,19 @@ export class ImgSourceNode extends dataflow.NodeFunction {
 			this.bufs.map((tensor, binding) => { return { binding, tensor }; }),
 			Math.ceil(this.canvas.width * this.canvas.height / 64),
 		);
-		this.df_node.on_this_changed();
-	}
 
-	/**
-	 * For `impl` in `dataflow.Node`
-	 * @override 
-	 */
-	eval() {
-		console.debug(`ImgSourceNode.eval(${this.df_node.index})`);
-		if (!this.bufs) return false;
+		this.emit_result("R", this.bufs[1]);
+		this.emit_result("G", this.bufs[2]);
+		this.emit_result("B", this.bufs[3]);
+
 		return true;
-	}
-
-	/**
-	 * @param {string} channel 
-	 */
-	read_packet(channel) {
-		if (!this.bufs) return undefined;
-
-		switch (channel) {
-			case "R": return this.bufs[1];
-			case "G": return this.bufs[2];
-			case "B": return this.bufs[3];
-			default: return undefined;
-		}
 	}
 
 	/**
 	 * @override
 	 */
-	on_upstream_change() {
-		this.bufs = undefined;
-		this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+	invalidate_impl() {
+		this.bufs = null;
 	}
 
 	/**

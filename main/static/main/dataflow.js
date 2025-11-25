@@ -1,4 +1,5 @@
 import * as gpu from "./gpu.js";
+import { CallbackPromise } from "./promise.js";
 
 export class Port {
 	/**
@@ -69,7 +70,7 @@ export class Edge {
 	/**
 	 * Main way to get packets from the system
 	 * If there is no packet, attempts to re-eval
-	 * @returns {gpu.Tensor | null}
+	 * @returns {Promise<gpu.Tensor | null>}
 	 */
 	async read_packet() {
 		if (!this.packet) await this.in_port.node.eval();
@@ -100,7 +101,7 @@ export class Context {
 		this.to_update = new Set();
 
 		/**
-		 * @type {UnlockPromise[]}
+		 * @type {CallbackPromise[]}
 		 */
 		this.eval_promises = [];
 	}
@@ -130,44 +131,14 @@ export class Context {
 			return await Promise.resolve();
 		}
 
-		const promise = new UnlockPromise();
+		const promise = new CallbackPromise();
 		Context.instance.eval_promises.push(promise);
 		await promise;
 	}
 	static unlock_eval() {
 		Context.instance.eval_lock = false;
 		for (const p of Context.instance.eval_promises) {
-			p.on_eval_unlocked();
-		}
-	}
-}
-
-class UnlockPromise {
-	constructor() {
-		this.callbacks = [];
-		this.error_handler = null;
-	}
-
-	then(then_callback) {
-		this.callbacks.push(then_callback);
-		return this;
-	}
-	catch(catch_callback) {
-		this.error_handler = catch_callback;
-	}
-
-	on_eval_unlocked() {
-		let value = undefined;
-		try {
-			for (const callback of this.callbacks) {
-				value = callback(value);
-			}
-		} catch (err) {
-			if (this.error_handler) {
-				this.error_handler(err);
-			} else {
-				throw err;
-			}
+			p.trigger();
 		}
 	}
 }
@@ -361,7 +332,7 @@ export class Node {
 	/**
 	 * @param {Port} in_port 
 	 * @param {Port} out_port 
-	 * @returns {Edge | null}
+	 * @returns {Promise<Edge | null>}
 	 *
 	 * Connect two ports, and trigger evaluation if the connection is accepted by `Node.verify`
 	 * Only DAG's are allowed
@@ -438,7 +409,9 @@ export class Node {
 		 */
 		const work_list = new Map();
 		for (const node of to_eval) {
-			work_list.add(node.index, node.eval().then(ok => { return { node, status: ok } }));
+			work_list.set(node.index, node.eval().then(ok => {
+				return { node, status: ok }
+			}));
 		}
 
 		while (work_list.size != 0) {
@@ -449,7 +422,9 @@ export class Node {
 			for (const edge of node.outputs()) {
 				const next = edge.out_port.node;
 				if (!work_list.has(next.index)) {
-					work_list.add(next.index, next.eval().then(ok => { return { node: next, status: ok } }));
+					work_list.set(next.index, next.eval().then(ok => {
+						return { node: next, status: ok }
+					}));
 				}
 			}
 		}

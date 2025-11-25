@@ -66,8 +66,6 @@ class Edge {
 			if (is_mouseover) {
 				this.remove();
 				is_mouseover = false;
-				this.input.button.removeAttribute("class");
-				this.output.button.removeAttribute("class");
 			}
 		});
 
@@ -76,14 +74,16 @@ class Edge {
 	}
 
 	remove() {
-		console.debug(`remove(Edge.${this.index})`);
+		if (!dataflow.Context.can_edit()) return;
 
 		this.edge.remove();
 		this.hitbox.remove();
 
+		this.e.disconnect();
 		this.input.node.outs.get(this.input.name).delete(this);
 		this.output.node.ins.get(this.output.name).delete(this);
-		this.e.disconnect();
+		this.input.button.removeAttribute("class");
+		this.output.button.removeAttribute("class");
 	}
 }
 
@@ -184,7 +184,7 @@ export class Node {
 		const remove = document.createElement("button");
 		remove.textContent = "x";
 		remove.addEventListener("click", () => {
-			dataflow.Context.lock_eval();
+			if (!dataflow.Context.can_edit()) return;
 
 			for (const port of this.ins.values()) {
 				for (const edge of port) edge.remove();
@@ -193,10 +193,10 @@ export class Node {
 				for (const edge of port) edge.remove();
 			}
 			this.div.remove();
-			this.n.destroy();
 			Node.all_nodes.delete(this);
 
-			dataflow.Context.unlock_eval();
+			dataflow.Context.acquire_edit_lock();
+			this.n.destroy().then(() => dataflow.Context.release_edit_lock());
 		});
 
 		right_group.appendChild(remove);
@@ -215,9 +215,6 @@ export class Node {
 		footer.appendChild(right_group);
 
 		right_group.appendChild(this.init_port_group("out", this.n.out_channel_names()));
-		this.size_text = document.createElement("span");
-		this.size_text.textContent = "Size: ? x ?";
-		left_group.appendChild(this.size_text);
 
 		return footer;
 	}
@@ -290,10 +287,11 @@ export class Node {
 	 * @param {Port} input 
 	 * @param {Port} output 
 	 */
-	static connect(input, output) {
-		const df_edge = dataflow.Node.connect(input.to_dataflow(), output.to_dataflow());
+	static async connect(input, output) {
+		if (!dataflow.Context.can_edit()) return;
+
+		const df_edge = await dataflow.Node.connect(input.to_dataflow(), output.to_dataflow());
 		if (!df_edge) {
-			console.warn(`Could not connect ${input.node.index}@${input.name} -> ${output.node.index}@${output.name}`);
 			return;
 		}
 		const edge = new Edge(input, output, df_edge);
