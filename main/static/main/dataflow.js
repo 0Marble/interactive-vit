@@ -1,3 +1,5 @@
+import * as gpu from "./gpu.js";
+
 export class Port {
 	/**
 	 *
@@ -11,14 +13,21 @@ export class Port {
 		this.channel = channel;
 		this.dir = dir;
 	}
+
+	/**
+	 * @returns {string}
+	 */
+	format() {
+		return `${this.node.format()}@${this.dir}_${this.channel}`;
+	}
 }
 
 export class Edge {
 	static counter = 0;
 	/**
-	 *
 	 * @param {Port} in_port 
 	 * @param {Port} out_port 
+	 * Dont call directly
 	 */
 	constructor(in_port, out_port) {
 		Edge.counter += 1;
@@ -27,28 +36,140 @@ export class Edge {
 		 * @type {number}
 		 */
 		this.index = Edge.counter;
-		console.debug(`connect(${in_port.node.index}@${in_port.channel}, ${out_port.node.index}@${out_port.channel}) -> edge_${this.index}`);
 		this.in_port = in_port;
 		this.out_port = out_port;
+		/**
+		 * @type {gpu.Tensor | null}
+		 */
+		this.packet = null;
+
+		console.debug(`new ${this.format()}: ${in_port.format()} -> ${out_port.format()}`);
 	}
 
 	/**
-	 * Removes the edge, possibly triggering a calculation downstream
-	 * @fires Node#on_upstream_change
+	 * @returns {string}
+	 */
+	format() {
+		return `Edge(${this.index})`;
+	}
+
+	/**
+	 * Removes the edge. Does not trigger re-evaluation
 	 */
 	disconnect() {
 		if (!Context.can_edit()) return;
 
-		console.debug(`disconnect(${this.index})`);
+		console.debug(`${this.format()}: disconnect()`);
 		this.in_port.node.outs.get(this.in_port.channel).delete(this);
 		this.out_port.node.ins.get(this.out_port.channel).delete(this);
-		this.out_port.node.on_upstream_change();
+
+		this.out_port.node.invalidate_with_descendants();
 	}
 
-	read_packet() {
-		return this.in_port.node.impl.read_packet(this.in_port.channel);
+	/**
+	 * Main way to get packets from the system
+	 * If there is no packet, attempts to re-eval
+	 * @returns {gpu.Tensor | null}
+	 */
+	async read_packet() {
+		if (!this.packet) await this.in_port.node.eval();
+		return this.packet;
 	}
 
+	clear_packet() {
+		this.packet = null;
+	}
+
+	/**
+	 * @param {gpu.Tensor} packet 
+	 */
+	write_packet(packet) {
+		this.packet = packet;
+	}
+}
+
+export class Context {
+	static instance = new Context();
+
+	constructor() {
+		this.edit_lock = 0;
+		this.eval_lock = false;
+		/**
+		 * @type {Set<Node>}
+		 */
+		this.to_update = new Set();
+
+		/**
+		 * @type {UnlockPromise[]}
+		 */
+		this.eval_promises = [];
+	}
+
+	static can_edit() {
+		return Context.instance.edit_lock === 0;
+	}
+	static acquire_edit_lock() {
+		Context.instance.edit_lock++;
+	}
+	static release_edit_lock() {
+		Context.instance.edit_lock--;
+		if (Context.instance.edit_lock < 0) {
+			Context.instance.edit_lock = 0;
+			console.warn("edit_lock went below 0");
+		}
+		if (Context.instance.edit_lock === 0) {
+			console.debug("edit_lock fully released");
+		}
+	}
+
+	static lock_eval() {
+		Context.instance.eval_lock = true;
+	}
+	static async ensure_can_eval() {
+		if (!Context.instance.eval_lock) {
+			return await Promise.resolve();
+		}
+
+		const promise = new UnlockPromise();
+		Context.instance.eval_promises.push(promise);
+		await promise;
+	}
+	static unlock_eval() {
+		Context.instance.eval_lock = false;
+		for (const p of Context.instance.eval_promises) {
+			p.on_eval_unlocked();
+		}
+	}
+}
+
+class UnlockPromise {
+	constructor() {
+		this.callbacks = [];
+		this.error_handler = null;
+	}
+
+	then(then_callback) {
+		this.callbacks.push(then_callback);
+		return this;
+	}
+	catch(catch_callback) {
+		this.error_handler = catch_callback;
+	}
+
+	on_eval_unlocked() {
+		let value = undefined;
+		try {
+			for (const callback of this.callbacks) {
+				value = callback(value);
+			}
+		} catch (err) {
+			if (this.error_handler) {
+				this.error_handler(err);
+			} else {
+				throw err;
+			}
+		}
+	}
 }
 
 /**
@@ -106,95 +227,6 @@ class EdgeIter {
 	}
 }
 
-export class NodeFunction {
-	/**
-	 * @virtual
-	 * @returns {Iterable<string>}
-	 */
-	in_channel_names() {
-		return [];
-	}
-
-	/**
-	 * @virtual
-	 * @returns {Iterable<string>}
-	 */
-	out_channel_names() {
-		return [];
-	}
-
-	/**
-	 * @virtual
-	 */
-	on_upstream_change() { }
-
-	/**
-	 * @virtual
-	 * @returns {boolean}
-	 */
-	eval() {
-		return false;
-	}
-
-	/**
-	 * @virtual
-	 * @returns {boolean}
-	 */
-	verify_io() {
-		return true;
-	}
-
-	/**
-	 * Returns `eval`'ed packet, `undefined` if couldn't `eval`
-	 * @param {string} channel 
-	 * @returns {undefined | any }
-	 */
-	read_packet(_channel) {
-		return undefined;
-	}
-}
-
-export class Context {
-	static instance = new Context();
-
-	constructor() {
-		this.edit_lock = 0;
-		this.eval_lock = false;
-		/**
-		 * @type {Set<Node>}
-		 */
-		this.eval_later = new Set();
-	}
-
-	static can_edit() {
-		return Context.instance.edit_lock === 0;
-	}
-	static acquire_edit_lock() {
-		Context.instance.edit_lock++;
-	}
-	static release_edit_lock() {
-		Context.instance.edit_lock--;
-		if (Context.instance.edit_lock < 0) {
-			Context.instance.edit_lock = 0;
-			console.warn("edit_lock went below 0");
-		}
-		if (Context.instance.edit_lock === 0) {
-			console.debug("edit_lock fully released");
-		}
-	}
-
-	static lock_eval() {
-		Context.instance.eval_lock = true;
-	}
-	static unlock_eval() {
-		Context.instance.eval_lock = false;
-		for (const node of Context.instance.eval_later.values()) {
-			node.on_upstream_change();
-		}
-		Context.instance.eval_later.clear();
-	}
-}
-
 export class Node {
 	static counter = 0;
 	/**
@@ -202,10 +234,7 @@ export class Node {
 	 */
 	static all_nodes = new Set();
 
-	/**
-	 * @param {NodeFunction} impl 
-	 */
-	constructor(impl) {
+	constructor() {
 		Node.counter += 1;
 		/**
 		 *@type {number}
@@ -220,189 +249,245 @@ export class Node {
 		 */
 		this.outs = new Map();
 
-		this.impl = impl;
-
-		for (const channel of this.impl.in_channel_names()) {
+		for (const channel of this.in_channel_names()) {
 			this.ins.set(channel, new Set());
 		}
-		for (const channel of this.impl.out_channel_names()) {
+		for (const channel of this.out_channel_names()) {
 			this.outs.set(channel, new Set());
 		}
 
 		Node.all_nodes.add(this);
 	}
 
-	/**
-	 *
-	 * @param {string | undefined} port 
-	 * @returns {Iterable<Edge>}
-	 */
-	inputs(port) {
-		return new EdgeIter(this, "in", port);
-	}
+	//// ================ CUSTOM IMPLEMENTATION START ================ 
 
 	/**
 	 * @returns {Iterable<string>}
 	 */
 	in_channel_names() {
-		return this.impl.in_channel_names();
+		return [];
 	}
 
 	/**
 	 * @returns {Iterable<string>}
 	 */
 	out_channel_names() {
-		return this.impl.out_channel_names();
+		return [];
+	}
+
+	/*
+	 * Main evaluation entry point
+	 * Returns false if couldnt evaluate
+	 * Puts all result packets into the corresponding edges
+	 * using `Node.emit_result`.
+	 * if eval is disabled by the Context this does not get called.
+	 */
+	async eval_impl() {
+		return false;
+	}
+
+	/**
+	 * Called when anything has changed upstream
+	 * Intended to clear caches 
+	 */
+	invalidate_impl() { }
+
+	/**
+	 * @param {string} _channel 
+	 * @param {"in"|"out"} _dir 
+	 * Verifies if all edges connected to this port are correct
+	 * (size ok, ...)
+	 */
+	verify(_dir, _channel) {
+		return true;
+	}
+
+	//// ================ CUSTOM IMPLEMENTATION END ================ 
+
+	/**
+	 * @param {string} channel 
+	 * @param {gpu.Tensor} packet 
+	 */
+	emit_result(channel, packet) {
+		for (const edge of this.outputs(channel)) {
+			edge.write_packet(packet);
+		}
 	}
 
 	/**
 	 *
+	 * @param {string | undefined} channel 
+	 * @returns {Iterable<Edge>}
+	 */
+	inputs(channel) {
+		return new EdgeIter(this, "in", channel);
+	}
+
+	/**
 	 * @param {string | undefined} port 
 	 * @returns {Iterable<Edge>}
 	 */
-	outputs(port) {
-		return new EdgeIter(this, "out", port);
+	outputs(channel) {
+		return new EdgeIter(this, "out", channel);
 	}
 
 	/**
-	 * Destroys this node, disconnects it from every parent/child.
-	 * Causes a `on_upstream_change` on all children of `this` node
-	 * @fires Node#on_upstream_change
+	 * @returns {string}
 	 */
-	destroy() {
-		if (!Context.can_edit()) return;
+	format() {
+		return `Node(${this.index})`;
+	}
 
-		Node.all_nodes.delete(this);
+	/**
+	 * Calls `invalidate_impl()` and clears packets on output edges
+	 */
+	invalidate() {
+		console.debug(`${this.format()}: invalidate()`);
+		this.invalidate_impl();
+		for (const edge of this.outputs()) edge.clear_packet();
+	}
 
-		for (const edge of this.inputs()) {
-			edge.in_port.node.outs.get(edge.in_port.channel).delete(edge);
-		}
+	/**
+	 * @returns {Promise<boolean>}
+	 */
+	async eval() {
+		console.debug(`${this.format()}: eval: started`);
+		await Context.ensure_can_eval();
+		const res = await this.eval_impl();
+		console.debug(`${this.format()}: eval: ${res}`);
+		return res;
+	}
+
+	/**
+	 * @param {Port} in_port 
+	 * @param {Port} out_port 
+	 * @returns {Edge | null}
+	 *
+	 * Connect two ports, and trigger evaluation if the connection is accepted by `Node.verify`
+	 * Only DAG's are allowed
+	 * Returns the new edge if everything is ok
+	 */
+	static async connect(in_port, out_port) {
+		const e = new Edge(in_port, out_port);
+
+		in_port.node.outs.get(in_port.channel).add(e);
+		out_port.node.ins.get(out_port.channel).add(e);
 
 		/**
 		 * @type {Set<Node>}
 		 */
-		const recalc = new Set();
-		for (const edge of this.outputs()) {
-			edge.out_port.node.ins.get(edge.out_port.channel).delete(edge);
-			recalc.add(edge.out_port.node);
-		}
-
-		for (const n of recalc) {
-			n.on_upstream_change();
-		}
-	}
-
-	/**
-	 * Main way to trigger a calculation.
-	 * Notifies `this` node something has changed in the upstream.
-	 * `this` node is a root of a sub-DAG of the current expression
-	 * 1. Call `on_upstream_change()` on all `impl`s in the sub-DAG (used to invalidate caches)
-	 * 2. Find leaf nodes, try to calculate them.
-	 * 
-	 * Calculation is handled by the `impl.eval()` method.
-	 * The method should:
-	 * 1. Do any neccessary checks to see if the configuration is correct
-	 * 2. Cache its' results to avoid needless recalculations
-	 * 3. Recursively call `eval` on `impl`'s parents
-	 */
-	on_upstream_change() {
-		if (Context.instance.eval_lock) {
-			Context.instance.eval_later.add(this);
-			return;
-		}
-
-		console.debug(`on_upstream_change(${this.index})`);
-		/**
-		 * @type {Set<Node>}
-		 */
-		const leaves = new Set();
-		Node.dfa(this, (n) => {
-			if (!n.outputs().next().value) {
-				leaves.add(n);
-			}
-			n.impl.on_upstream_change();
+		const reachable = new Set();
+		const no_loop = Node.dfa(out_port.node, node => {
+			if (reachable.has(node)) return false;
+			reachable.add(node);
 			return true;
 		});
 
-		for (const node of leaves) {
-			node.impl.eval();
+		if (!no_loop) {
+			console.warn(`illegal connection ${e.format()}: only DAGs allowed`);
+			in_port.node.outs.get(in_port.channel).delete(e);
+			out_port.node.ins.get(out_port.channel).delete(e);
+			return null;
 		}
+
+		if (!in_port.node.verify("out", in_port.channel) || !out_port.node.verify("in", out_port.channel)) {
+			console.warn(`illegal connection ${e.format()}: Node.verify()`);
+			in_port.node.outs.get(in_port.channel).delete(e);
+			out_port.node.ins.get(out_port.channel).delete(e);
+			return null;
+		}
+
+		await in_port.node.eval_with_descendants();
+
+		return e;
 	}
 
-	on_this_changed() {
-		console.debug(`on_this_changed(${this.index})`);
+	async destroy() {
+		/**
+		 * @type {Set<Node>}
+		 */
+		console.debug(`${this.format()}: destroy()`);
+		const to_eval = new Set();
 		for (const edge of this.outputs()) {
-			edge.out_port.node.on_upstream_change();
-		}
-	}
-
-	/**
-	 * Connect nodes, causes calculation in the `out_port.node` sub-DAG.
-	 * Returns `true` if the connection actually happened.
-	 * 1. Loops are illegal
-	 * 2. `in_port.dir` should be `"out"` 
-	 * 3. `out_port.dir` should be `"in"` 
-	 * 4. An edge is added but then instantly removed if any of the node's `impl`s 
-	 *		fail a `impl.verify_io()` custom check.
-	 *
-	 * @param {Port} in_port 
-	 * @param {Port} out_port 
-	 * @fires Node#on_upstream_change
-	 */
-	static connect(in_port, out_port) {
-		if (!Context.can_edit()) return;
-
-		if (in_port.node == out_port.node || in_port.dir !== "out" || out_port.dir !== "in") {
-			return undefined;
-		}
-
-		console.debug(`Connecting: ${in_port.node.index}@${in_port.channel} -> ${out_port.node.index}@${out_port.channel}...`);
-		const connected = new Set();
-		Node.dfa(out_port.node, (n) => {
-			connected.add(n); return true;
-		});
-		if (connected.has(in_port.node)) {
-			console.warn("Loop detected, cancelled connection");
-			return undefined;
-		}
-
-		const edge = new Edge(in_port, out_port);
-		in_port.node.outs.get(in_port.channel).add(edge);
-		out_port.node.ins.get(out_port.channel).add(edge);
-
-		if (!in_port.node.impl.verify_io() || !out_port.node.impl.verify_io()) {
-			console.warn("New edge failed IO verification, cancelled connection");
+			to_eval.add(edge.out_port.node);
 			edge.disconnect();
-			return undefined;
 		}
-		console.debug("Connection successfull");
 
-		out_port.node.on_upstream_change();
-
-		return edge;
+		const promises = [];
+		for (const node of to_eval) promises.push(node.eval_with_descendants());
+		await Promise.all(promises);
 	}
 
 	/**
-	 * @param {Node} node 
+	 * Causes a recursive invalidation
 	 */
-	static dfa(node, visitor) {
-		const stack = [node];
-		const visited = new Set(stack);
+	invalidate_with_descendants() {
+		Node.dfa(this, (node) => { node.invalidate(); return true; });
+	}
 
-		while (stack.length > 0) {
-			const cur = stack.pop();
-			if (!visitor(cur)) {
-				continue;
+	/**
+	 * Causes a recursive evaluation of all nodes in `to_eval` 
+	 * as well as their descendants
+	 * @param {Iterable<Node>} to_eval 
+	 */
+	static async eval_all_with_descendants(to_eval) {
+		await Context.ensure_can_eval();
+
+		/**
+		 * @type {Map<number, Promise<{node:Node,status:boolean}>>}
+		 */
+		const work_list = new Map();
+		for (const node of to_eval) {
+			work_list.add(node.index, node.eval().then(ok => { return { node, status: ok } }));
+		}
+
+		while (work_list.size != 0) {
+			const { node, status } = await Promise.race(work_list.values());
+			work_list.delete(node.index);
+			if (!status) continue;
+
+			for (const edge of node.outputs()) {
+				const next = edge.out_port.node;
+				if (!work_list.has(next.index)) {
+					work_list.add(next.index, next.eval().then(ok => { return { node: next, status: ok } }));
+				}
 			}
+		}
+	}
 
-			for (const egde of cur.outputs()) {
-				const next = egde.out_port.node;
+	async eval_with_descendants() {
+		await Node.eval_all_with_descendants([this]);
+	}
+
+	async eval_only_descendants() {
+		const nodes = new Set();
+		for (const edge of this.outputs()) nodes.add(edge.out_port.node);
+		await Node.eval_all_with_descendants(nodes);
+	}
+
+	/**
+	 * @param {Node} start 
+	 * @param {(node:Node)=>boolean} visitor 
+	 * @returns {boolean}
+	 */
+	static dfa(start, visitor) {
+		const visited = new Set([start]);
+		const stack = [start];
+		while (stack.length != 0) {
+			const node = stack.pop();
+
+			if (!visitor(node)) return false;
+
+			for (const edge of node.outputs()) {
+				const next = edge.out_port.node;
 				if (!visited.has(next)) {
 					visited.add(next);
 					stack.push(next);
 				}
 			}
 		}
+
+		return true;
 	}
 }
 
