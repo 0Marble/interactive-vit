@@ -1,7 +1,7 @@
 # This file may be used to create an environment using:
 # $ conda create --name <env> --file <this file>
 # platform: linux-64
-# created-by: conda 25.7.0
+# created-by: conda 25.11.0
 # Note: This is a conda requirements file (MatchSpec format)
 # Contains conda package specifications, not pip requirements
 
@@ -11,7 +11,7 @@ pkgs/main::aom==3.12.1=h7934f7d_0
 pkgs/main::asgiref==3.10.0=py313h06a4308_0
 pkgs/main::blas==1.0=mkl
 pkgs/main::bzip2==1.0.8=h5eee18b_6
-pkgs/main::ca-certificates==2025.11.4=h06a4308_0
+conda-forge::ca-certificates==2025.11.12=hbd8a1cb_0
 pkgs/main::cairo==1.18.4=h44eff21_0
 pkgs/main::dav1d==1.2.1=h5eee18b_0
 pkgs/main::django==5.2.7=py313h06a4308_0
@@ -69,7 +69,7 @@ pkgs/main::ncurses==6.5=h7934f7d_0
 pkgs/main::networkx==3.5=py313h06a4308_0
 pkgs/main::numpy==2.3.4=py313h720eef7_1
 pkgs/main::numpy-base==2.3.4=py313h95072fd_1
-pkgs/main::openssl==3.0.18=hd6dcaed_0
+conda-forge::openssl==3.6.0=h26f9b46_0
 pkgs/main::opentelemetry-api==1.37.0=py313h06a4308_0
 pkgs/main::pcre2==10.46=hf426167_0
 pkgs/main::pillow==12.0.0=py313h3b88751_1

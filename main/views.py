@@ -26,7 +26,7 @@ def dummy_compute(request: http.HttpRequest):
         msg = Message()
         msg.decode(request.body)
 
-        ch, dims, data = msg.tensors[0]
+        dims, data = msg.tensors["o"]
         t = torch.tensor(data).reshape(dims.tolist())
         t = torch.cos(t)
         data.clear()
@@ -44,14 +44,15 @@ def dummy_description(request):
 
 class Message:
     def __init__(self):
-        self.tensors = []
+        self.tensors = {}
 
     def encode(self):
         network = "big"
         writer = io.BytesIO()
         writer.write(int.to_bytes(len(self.tensors), 4, network))
 
-        for (channel, dims, data) in self.tensors:
+        for channel in self.tensors.keys():
+            (dims, data) = self.tensors[channel]
             enc = channel.encode(encoding="utf8")
             writer.write(int.to_bytes(len(enc), 4, network))
             writer.write(enc)
@@ -68,7 +69,7 @@ class Message:
 
     def decode(self, b: bytes):
         network = "big"
-        self.tensors = []
+        self.tensors = {}
 
         reader = io.BytesIO(b)
         num_packets = int.from_bytes(reader.read(4), byteorder=network, signed=False)
@@ -91,5 +92,5 @@ class Message:
             data = array.array('f')
             data.frombytes(reader.read(4 * elem_cnt))
 
-            self.tensors.append((channel, dims, data))
+            self.tensors[channel] = (dims, data);
 
