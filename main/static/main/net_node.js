@@ -88,6 +88,7 @@ class IODescription {
 	}
 
 	static parse(raw_obj) {
+		console.debug("parsing description...");
 		if (typeof raw_obj !== "object") throw new TypeError("IODescription should be an IOPort[]");
 		const ports = [];
 		for (const raw_port of raw_obj) ports.push(IOPort.parse(raw_port));
@@ -239,7 +240,6 @@ class Message {
 			view.setUint32(offset, dims.length);
 			offset += 4;
 			new Uint32Array(buffer, offset, dims.length).set(dims);
-			console.debug(buffer.slice(offset, offset + dims.length * 4))
 
 			offset += 4 * dims.length;
 			new Float32Array(buffer, offset, elem_cnt).set(new Float32Array(t.buf));
@@ -258,41 +258,59 @@ function add_padding(offset, align) {
 	return offset + align - m;
 }
 
-export class NetworkNode extends dataflow.NodeFunction {
+export class NetworkNode extends dataflow.Node {
+	static async load(endpoint) {
+		if (!NetworkNode.io_cache.has(endpoint)) {
+			const io = await fetch(`${endpoint}/description`, { method: "GET" })
+				.then(resp => resp.json())
+				.then(io => {
+					return IODescription.parse(io);
+				})
+				.catch(err => {
+					console.warn("Invalid IO description response:", err);
+				});
+			NetworkNode.io_cache.set(endpoint, io);
+		}
+
+		return new NetworkNode(endpoint);
+	}
+	/**
+	 * @type {Map<string, IODescription>
+	 */
+	static io_cache = new Map();
+
+	static io_for_init = undefined;
 
 	/**
 	 * @param {string} endpoint 
+	 * @param {IODescription} io 
 	 */
-	constructor(endpoint, on_io_description_acquired) {
+	constructor(endpoint) {
+		const io = NetworkNode.io_cache.get(endpoint);
+		console.assert(NetworkNode.io_for_init === undefined);
+		NetworkNode.io_for_init = io;
 		super();
+		console.assert(NetworkNode.io_for_init === io);
+		NetworkNode.io_for_init = undefined;
+
 
 		this.endpoint = endpoint;
 		this.div = document.createElement("div");
-		this.io = null;
 		/**
-		 *
+		 * @type {IODescription}
+		 */
+		this.io = io;
+		/**
 		 * @type {Map<string, gpu.Tensor> | undefined}
 		 */
-		this.outs = undefined;
-
-		fetch(`${endpoint}/description`, { method: "GET" })
-			.then(resp => resp.json())
-			.then(io => {
-				this.io = IODescription.parse(io);
-			})
-			.then(on_io_description_acquired)
-			.catch(err => {
-				console.warn("Invalid IO description response:", err);
-			});
-
-		this.fetch_node();
+		this.bufs = undefined;
 	}
 
-	fetch_node() {
+	async fetch_node() {
 		while (this.div.firstChild) this.div.firstChild.remove();
 
 		this.div.innerHTML = "<p>Loading...</p>"
-		fetch(`${this.endpoint}/contents`, { method: "GET" })
+		await fetch(`${this.endpoint}/contents`, { method: "GET" })
 			.then(resp => resp.text())
 			.then(html => {
 				this.div.innerHTML = html;
@@ -311,13 +329,8 @@ export class NetworkNode extends dataflow.NodeFunction {
 		this.div.appendChild(button);
 	}
 
-	/**
-	 *
-	 * @param {dataflow.Node} df_node 
-	 */
-	post_init(df_node, parent_div) {
+	post_init(parent_div) {
 		console.assert(this.io);
-		this.df_node = df_node;
 		parent_div.appendChild(this.div);
 	}
 
@@ -326,7 +339,8 @@ export class NetworkNode extends dataflow.NodeFunction {
 	 * @returns {Iterable<string>}
 	 */
 	in_channel_names() {
-		return this.io.in_names();
+		const io = this.io || NetworkNode.io_for_init;
+		return io.in_names();
 	}
 
 	/**
@@ -334,30 +348,37 @@ export class NetworkNode extends dataflow.NodeFunction {
 	 * @returns {Iterable<string>}
 	 */
 	out_channel_names() {
-		return this.io.out_names();
+		const io = this.io || NetworkNode.io_for_init;
+		return io.out_names();
 	}
 
 	/**
 	 * @virtual
 	 */
-	on_upstream_change() {
-		this.outs = undefined;
+	invalidate_impl() {
+		this.bufs = undefined;
 	}
 
 	/**
 	 * @virtual
 	 * @returns {boolean}
 	 */
-	eval() {
-		console.debug(`NetworkNode.eval(${this.df_node.index})`)
-		if (this.outs) return true;
-		this.outs = new Map();
+	async eval_impl() {
+		console.debug(`NetworkNode.eval(${this.format()})`)
+		if (this.bufs) {
+			for (const [ch, t] of this.bufs) {
+				this.emit_result(ch, t);
+			}
+
+			return true;
+		}
+		this.bufs = new Map();
 
 		const msg = new Message();
-		for (const ch of this.df_node.in_channel_names()) {
+		for (const ch of this.in_channel_names()) {
 			let cnt = 0;
-			for (const edge of this.df_node.inputs(ch)) {
-				const tensor = edge.read_packet();
+			for (const edge of this.inputs(ch)) {
+				const tensor = await edge.read_packet();
 				if (!tensor) return false;
 				msg.add_tensor(edge.out_port.channel, tensor);
 				cnt++;
@@ -368,14 +389,14 @@ export class NetworkNode extends dataflow.NodeFunction {
 		}
 
 		dataflow.Context.acquire_edit_lock();
-		msg.send(this.endpoint).then(() => {
+		await msg.send(this.endpoint).then(() => {
 			for (let i = 0; i < msg.get_tensor_count(); i++) {
 				const t = msg.get_nth_tensor(i);
 				const ch = msg.get_nth_channel(i);
-				this.outs.set(ch, t);
+				this.bufs.set(ch, t);
+				this.emit_result(ch, t);
 			}
 			dataflow.Context.release_edit_lock();
-			this.df_node.on_this_changed();
 		}).catch(err => {
 			console.warn("Evaluation error:", err);
 			this.retry_eval()
@@ -391,17 +412,17 @@ export class NetworkNode extends dataflow.NodeFunction {
 	 * @virtual
 	 * @returns {boolean}
 	 */
-	verify_io() {
+	verify(_dir, _channel) {
 		for (const ch of this.in_channel_names()) {
 			let cnt = 0;
-			for (const _ of this.df_node.inputs(ch)) cnt++;
+			for (const _ of this.inputs(ch)) cnt++;
 			if (!this.io.channel_access_valid("in", ch, cnt) && cnt !== 0) {
 				return false;
 			}
 		}
 		for (const ch of this.out_channel_names()) {
 			let cnt = 0;
-			for (const _ of this.df_node.outputs(ch)) cnt++;
+			for (const _ of this.outputs(ch)) cnt++;
 			if (!this.io.channel_access_valid("out", ch, cnt) && cnt !== 0) {
 				return false;
 			}
@@ -409,18 +430,4 @@ export class NetworkNode extends dataflow.NodeFunction {
 
 		return true;
 	}
-
-	/**
-	 * Returns `eval`'ed packet, `undefined` if couldn't `eval`
-	 * @param {string} channel 
-	 * @returns {undefined | any }
-	 */
-	read_packet(channel) {
-		if (this.outs) {
-			const t = this.outs.get(channel);
-			return t;
-		}
-		return undefined;
-	}
-
 }

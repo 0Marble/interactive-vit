@@ -5,7 +5,7 @@ import * as ui from "./graph_ui.js";
 import { ImgSourceNode } from "./img_source_node.js";
 import { Conv2dNode } from "./conv2d_node.js";
 import { ImgViewNode } from "./img_view_node.js";
-// import { NetworkNode } from "./net_node.js";
+import { NetworkNode } from "./net_node.js";
 
 await gpu.init();
 
@@ -40,16 +40,15 @@ function init_toolbar() {
 		conv2d.post_init(ui_node.content_div);
 	});
 
-	// const net_tool = document.createElement("button");
-	// net_tool.textContent = "DummyNet"
-	// toolbar.appendChild(net_tool);
-	// net_tool.addEventListener("click", () => {
-	// 	const net = new NetworkNode("dummy", () => {
-	// 		const df = new dataflow.Node(net);
-	// 		const ui_node = new ui.Node(df);
-	// 		net.post_init(df, ui_node.content_div);
-	// 	});
-	// });
+	const net_tool = document.createElement("button");
+	net_tool.textContent = "DummyNet"
+	toolbar.appendChild(net_tool);
+	net_tool.addEventListener("click", () => {
+		NetworkNode.load("dummy").then(net => {
+			const ui_node = new ui.Node(net);
+			net.post_init(ui_node.content_div);
+		});
+	});
 }
 
 init_toolbar();

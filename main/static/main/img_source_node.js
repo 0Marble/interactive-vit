@@ -62,6 +62,7 @@ export class ImgSourceNode extends dataflow.Node {
 	 * then, this is called.
 	 */
 	on_image_loaded() {
+		this.invalidate_with_descendants();
 		this.has_img = true;
 		dataflow.Context.acquire_edit_lock();
 		this.eval_with_descendants().then(() => dataflow.Context.release_edit_lock());
