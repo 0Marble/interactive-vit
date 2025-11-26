@@ -1,5 +1,12 @@
 # Critical
 
+- keep track of sizes on the client
+- ability to save/share graphs
+    1. A (super-) user designs a graph locally, then it is possible to save and run it on the server.
+        - How can we design a very expensive graph locally?
+    2. It should also be possible to design a graph non-interactively (json file), so the system operators can create expensive networks.
+    3. Gradual implementation: it is much easier to make a server-side node than a client-side node, since client side nodes need custom WebGPU kernels, and on the server we may just use pytorch.
+
 - models: implement a model using server-side nodes
     1. VGG16: looks simple, will get me familiar with the concepts in the field
 
