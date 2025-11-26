@@ -4,10 +4,9 @@ from django.template import loader
 
 import torch
 from PIL import Image
-import io
-import array
-import sys
 import logging
+
+from . import message 
 
 logger = logging.getLogger(__name__)
 
@@ -23,15 +22,18 @@ def dummy_contents(request):
 
 def dummy_compute(request: http.HttpRequest):
     try:
-        msg = Message()
+        msg = message.Message()
         msg.decode(request.body)
 
-        dims, data = msg.tensors["o"]
+        dims, data = msg.get("o")
+
         t = torch.tensor(data).reshape(dims.tolist())
         t = torch.cos(t)
         data.clear()
         data.frombytes(t.numpy().tobytes())
 
+        msg.clear()
+        msg.set("o", dims, data)
         res = msg.encode()
         return http.HttpResponse(res)
     except Exception as e:
@@ -40,57 +42,4 @@ def dummy_compute(request: http.HttpRequest):
 
 def dummy_description(request):
     return http.JsonResponse([{"kind":"in", "channel":"o", "access":"1"},{"kind":"out", "channel":"o", "access":"*"} ], safe=False)
-
-
-class Message:
-    def __init__(self):
-        self.tensors = {}
-
-    def encode(self):
-        network = "big"
-        writer = io.BytesIO()
-        writer.write(int.to_bytes(len(self.tensors), 4, network))
-
-        for channel in self.tensors.keys():
-            (dims, data) = self.tensors[channel]
-            enc = channel.encode(encoding="utf8")
-            writer.write(int.to_bytes(len(enc), 4, network))
-            writer.write(enc)
-
-            padding = len(enc) % 4
-            if padding != 0: padding = 4 - padding
-            writer.write(bytes(padding))
-
-            writer.write(int.to_bytes(len(dims), 4, network))
-            writer.write(dims.tobytes())
-            writer.write(data.tobytes())
-
-        return writer.getbuffer()
-
-    def decode(self, b: bytes):
-        network = "big"
-        self.tensors = {}
-
-        reader = io.BytesIO(b)
-        num_packets = int.from_bytes(reader.read(4), byteorder=network, signed=False)
-
-        for i in range(0, num_packets):
-            channel_len = int.from_bytes(reader.read(4), byteorder=network, signed=False)
-            channel = reader.read(channel_len).decode(encoding="utf8")
-            
-            padding = channel_len % 4
-            if padding != 0: padding = 4 - padding
-            reader.read(padding)
-
-            n_dim = int.from_bytes(reader.read(4), byteorder=network, signed=False)
-            dims = array.array('I')
-            dims.frombytes(reader.read(4 * n_dim))
-
-            elem_cnt = 1
-            for d in dims: elem_cnt *= d
-
-            data = array.array('f')
-            data.frombytes(reader.read(4 * elem_cnt))
-
-            self.tensors[channel] = (dims, data);
 
