@@ -1,5 +1,5 @@
-import * as dataflow from "./dataflow.js";
 import * as gpu from "./gpu.js";
+import * as graph from "./graph.js";
 
 const clear_kernel_src = `
 @group(0) @binding(0)
@@ -34,63 +34,64 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
 }
 `;
 
-export class ImgViewNode extends dataflow.Node {
+export class ImgViewNode extends graph.Node {
 	constructor() {
 		super();
+		this.pre_init();
 
-		this.div = document.createElement("div");
+		this.img_div = document.createElement("div");
 
 		this.canvas = document.createElement("canvas");
 		this.canvas.className = "image_view_canvas";
 		this.ctx = this.canvas.getContext("2d");
-		this.div.appendChild(this.canvas);
+		this.img_div.appendChild(this.canvas);
 
 		this.merge = new gpu.Kernel(merge_kernel_src, [new gpu.UniformInfo("cfg", 4 * 4, 2)]);
 		this.clear = new gpu.Kernel(clear_kernel_src);
 
-		this.buf = undefined;
-	}
-
-	post_init(parent_div) {
-		parent_div.appendChild(this.div);
+		this.post_init();
 	}
 
 	/**
 	 * @override 
 	 */
-	async eval_impl() {
-		console.debug(`ImgViewNode.eval(${this.format()})`);
-		if (this.buf) return true;
-
+	async eval() {
 		let size = undefined;
 		for (const edge of this.inputs()) {
-			const packet = await edge.read_packet(edge.in_port.channel);
-			if (!packet) return false;
+			/**
+			 * @type {gpu.Tensor | null}
+			 */
+			const packet = await edge.read_packet();
+			if (!packet) return null;
 
 			if (packet.dims.length !== 2) {
-				console.error(`Invalid input on ImgViewNode ${this.format()}. Expected a 2d buffer`);
-				return false;
+				console.error(`Invalid input on ImgViewNode ${this}. Expected a 2d buffer`);
+				return null;
 			}
 			const w = packet.dims[1];
 			const h = packet.dims[0];
 			if (!size) {
 				size = { w, h };
 			} else if (size.w != w || size.h != h) {
-				console.error(`Inconsistent input sizes on ImgViewNode ${this.format()}`);
-				return false;
+				console.error(`Inconsistent input sizes on ImgViewNode ${this}`);
+				return null;
 			}
 		}
 
 		if (!size) {
-			return true;
+			return null;
 		}
 
 		this.canvas.width = size.w;
 		this.canvas.height = size.h;
 
-		this.buf = new gpu.Tensor([size.h, size.w], 4);
+		const buf = new gpu.Tensor([size.h, size.w], 4);
 		for (const edge of this.inputs()) {
-			const packet = await edge.read_packet(edge.in_port.channel);
+			/**
+			 * @type {gpu.Tensor | null}
+			 */
+			const packet = await edge.read_packet();
+
 			let cfg = null;
 			switch (edge.out_port.channel) {
 				case "R": cfg = new Uint32Array([0, 0x000000FF, 0, 0]); break;
@@ -101,53 +102,43 @@ export class ImgViewNode extends dataflow.Node {
 			this.merge.set_uniform("cfg", cfg.buffer);
 			this.merge.run(
 				[
-					{ binding: 0, tensor: this.buf },
+					{ binding: 0, tensor: buf },
 					{ binding: 1, tensor: packet },
 				],
-				Math.ceil(this.buf.elem_cnt / 64),
+				Math.ceil(buf.elem_cnt / 64),
 			);
 
-			await this.move_buffer_to_canvas();
-		}
-		return true;
-	}
-
-	async move_buffer_to_canvas() {
-		const size = this.buf.as_2d_size();
-
-		dataflow.Context.acquire_edit_lock();
-
-		await this.buf.to_cpu().then((buf) => {
-			const rgba = new Uint8Array(buf);
+			const rgba = new Uint8Array(await buf.to_cpu());
 			const img = this.ctx.createImageData(size.w, size.h);
 			for (let i = 0; i < size.w * size.h * 4; i++) {
 				img.data[i] = rgba[i];
 			}
 			this.ctx.putImageData(img, 0, 0);
-			dataflow.Context.release_edit_lock();
-		});
-	}
+		}
 
-	/**
-	 * @override
-	 */
-	invalidate_impl() {
-		this.buf = undefined;
-		this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+		return null;
 	}
 
 	/**
 	 * @override
 	 * @returns {Iterable<string>}
 	 */
-	in_channel_names() {
+	input_names() {
 		return ["R", "G", "B"];
 	}
 
-	/**
-	 * @override
-	 */
-	kind() {
-		return "img_view";
+	draw_content() {
+		this.content_div.appendChild(this.img_div);
+	}
+
+	static async register_factory() {
+		const toolbar = document.getElementById("toolbar");
+
+		const node_button = document.createElement("button");
+		node_button.textContent = "New ImgView Node";
+		node_button.addEventListener("click", () => {
+			new ImgViewNode();
+		});
+		toolbar.appendChild(node_button);
 	}
 }

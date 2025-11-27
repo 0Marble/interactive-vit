@@ -1,5 +1,6 @@
-import * as gpu from "./gpu.js";
-import { CallbackPromise } from "./promise.js";
+import { AsyncLock, CallbackPromise } from "./promise.js";
+
+const graph_div = document.getElementById("graph_div");
 
 export class Port {
 	/**
@@ -16,6 +17,11 @@ export class Port {
 	toString() {
 		return `${this.node}@${this.dir}_${this.channel}`;
 	}
+
+	button() {
+		const id = `node_${this.node.index}_${this.dir}_${this.channel}`;
+		return document.getElementById(id);
+	}
 }
 
 export class Edge {
@@ -29,19 +35,19 @@ export class Edge {
 		Context.ensure_not_eval();
 
 		if (in_port.dir !== "out" || out_port.dir !== "in") {
-			console.warn("new edge: must connect out -> in");
+			console.warn("new edge cancelled: must connect out -> in");
 			return null;
 		}
 
 		if (!Node.dfa(out_port.node, (node) => node !== in_port.node)) {
-			console.warn("new edge: loop detected");
+			console.warn("new edge cancelled: loop detected");
 			return null;
 		}
 
 		const e = new Edge(in_port, out_port);
 		console.debug(`new ${e}: ${in_port} -> ${out_port}`);
 
-		Context.schedule_eval(in_port.node);
+		Context.schedule_eval(out_port.node);
 
 		return e;
 	}
@@ -75,9 +81,13 @@ export class Edge {
 	toString() {
 		return `Edge(${this.index})`;
 	}
+
+	async read_packet() {
+		return this.in_port.node.get(this.in_port.channel);
+	}
 }
 
-class Pinout {
+export class Pinout {
 	constructor() {
 		this.values = new Map();
 	}
@@ -99,7 +109,7 @@ class Pinout {
 }
 
 export class Node {
-	/* ========= IMPLEMENTORD METHODS START ========= */
+	/* ========= IMPLEMENTOR METHODS START ========= */
 
 	/**
 	 * @returns{Iterable<string>}
@@ -122,9 +132,17 @@ export class Node {
 		throw new Error(`${this}.eval(): unimplemented`);
 	}
 
-	/* ========== IMPLEMENTORD METHODS END ========== */
+	serialize() {
+		throw new Error(`${this}.serialize(): unimplemented`);
+	}
 
-	constructor() {
+	draw_content() { }
+
+	/* ========== IMPLEMENTOR METHODS END ========== */
+
+	constructor() { }
+
+	pre_init() {
 		Context.ensure_not_eval();
 
 		this.index = Context.new_index();
@@ -146,6 +164,15 @@ export class Node {
 		 */
 		this.outs = new Map();
 
+		this.pos = { x: 0, y: 0 };
+		this.div = document.createElement("div");
+		this.div.className = "graph_node";
+		this.div.id = `node_${this.index}`;
+		this.content_div = document.createElement("div");
+		this.content_div.className = "node_content";
+	}
+
+	post_init() {
 		for (const ch of this.input_names()) {
 			this.ins.set(ch, new Set());
 		}
@@ -153,7 +180,119 @@ export class Node {
 			this.outs.set(ch, new Set());
 		}
 
+		this.div.appendChild(this.init_header());
+		this.div.appendChild(this.init_content());
+		this.div.appendChild(this.init_footer());
+		this.init_drag();
+		graph_div.appendChild(this.div);
+
 		console.debug(`new ${this}`);
+	}
+
+	init_drag() {
+		this.div.style = `top: ${this.pos.y}px; left: ${this.pos.x}px;`;
+		let delta = { x: 0, y: 0 };
+		this.div.addEventListener("dragstart", (event) => {
+			delta.x = this.pos.x - event.x;
+			delta.y = this.pos.y - event.y;
+			event.dataTransfer.effectAllowed = "move";
+		});
+		this.div.draggable = true;
+		this.div.addEventListener("dragend", (event) => {
+			this.move_to(event.x + delta.x, event.y + delta.y);
+		});
+	}
+
+	init_header() {
+		const header = document.createElement("div");
+		header.className = "node_header";
+
+		const left = document.createElement("div");
+		left.className = "node_header_left";
+		left.appendChild(this.init_port_group("in", this.input_names()));
+		header.appendChild(left);
+
+		const right = document.createElement("div");
+		right.className = "node_header_right";
+		const remove_button = document.createElement("button");
+		remove_button.textContent = "x";
+		remove_button.addEventListener("click", async () => {
+			await Context.wait_for_not_in_eval();
+			this.destroy();
+			await Context.do_eval();
+		});
+		right.appendChild(remove_button);
+		header.appendChild(right);
+
+		return header;
+	}
+
+	init_content() {
+		this.draw_content();
+		return this.content_div;
+	}
+
+	init_footer() {
+		const footer = document.createElement("div");
+		footer.className = "node_footer";
+
+		const right = document.createElement("div");
+		right.className = "node_footer_right";
+		right.appendChild(this.init_port_group("out", this.output_names()));
+		footer.appendChild(right);
+
+		return footer;
+	}
+
+	static current_connect_port = null;
+	/**
+	 * @param {"in"|"out"} dir 
+	 * @param {Iterable<string>} channels 
+	 */
+	init_port_group(dir, channels) {
+		const div = document.createElement("div");
+
+		for (const ch of channels) {
+			const button = document.createElement("button");
+			button.id = `node_${this.index}_${dir}_${ch}`;
+			button.textContent = ch;
+			button.className = "non_selected_port";
+			div.appendChild(button);
+
+			button.addEventListener("click", async () => {
+				await Context.wait_for_not_in_eval();
+
+				const this_port = new Port(this, dir, ch);
+				if (Node.current_connect_port === null) {
+					Node.current_connect_port = this_port;
+					this_port.button().className = "selected_port";
+				} else {
+					const a = Node.current_connect_port;
+					const b = this_port;
+					let edge = null;
+					if (a.dir === "in" && b.dir === "out") {
+						edge = Edge.connect(b, a);
+					} else {
+						edge = Edge.connect(a, b);
+					}
+					a.button().className = "non_selected_port";
+					Node.current_connect_port = null;
+
+					await Context.do_eval();
+				}
+			});
+		}
+
+		return div;
+	}
+
+	/**
+	 * @param {number} x 
+	 * @param {number} y 
+	 */
+	move_to(x, y) {
+		this.pos = { x, y };
+		this.div.style = `top: ${this.pos.y}px; left: ${this.pos.x}px;`;
 	}
 
 	destroy() {
@@ -168,8 +307,11 @@ export class Node {
 		}
 
 		Context.all_nodes.delete(this);
+		if (Context.nodes_to_eval.has(this)) {
+			Context.nodes_to_eval.delete(this);
+		}
 
-		console.debug(`${this}.destroy()`);
+		this.div.remove();
 	}
 
 	/**
@@ -209,7 +351,8 @@ export class Node {
 	 * @returns {Edge | null}
 	 */
 	single_input(channel) {
-		return this.inputs(channel).next().value;
+		const set = this.ins.get(channel);
+		return set.values().next().value || null
 	}
 
 	/**
@@ -239,6 +382,7 @@ export class Node {
 		Context.ensure_not_eval();
 		this.eval_state = null;
 	}
+
 	invalidate_with_descendants() {
 		Node.dfa(this, (node) => { node.invalidate(); return true; });
 	}
@@ -290,11 +434,21 @@ export class Context {
 	}
 
 	static is_eval = false;
+	static eval_signal = new CallbackPromise(true);
 
-	/**
-	 * @type {Set<Node>}
-	 */
-	static nodes_to_eval = new Set();
+	static start_eval() {
+		Context.is_eval = true;
+		Context.eval_state = new CallbackPromise();
+	}
+
+	static end_eval() {
+		Context.is_eval = false;
+		Context.eval_signal.trigger();
+	}
+
+	static async wait_for_not_in_eval() {
+		await Context.eval_signal;
+	}
 
 	static ensure_not_eval() {
 		if (Context.is_eval) {
@@ -309,6 +463,11 @@ export class Context {
 	}
 
 	/**
+	 * @type {Set<Node>}
+	 */
+	static nodes_to_eval = new Set();
+
+	/**
 	 * @param {Node} node 
 	 */
 	static schedule_eval(node) {
@@ -320,7 +479,7 @@ export class Context {
 		console.debug("Context.do_eval(): start");
 		for (const node of Context.nodes_to_eval) node.invalidate_with_descendants();
 
-		Context.is_eval = true;
+		Context.start_eval();
 
 		/**
 		 * @type {Map<Node,Promise<{node:Node,res:(Pinout|null)}>>}
@@ -329,6 +488,7 @@ export class Context {
 		for (const node of Context.nodes_to_eval) {
 			worklist.set(node, node.do_eval().then(res => { return { node, res } }));
 		}
+		Context.nodes_to_eval.clear();
 
 		while (worklist.size > 0) {
 			const { node, res } = await Promise.race(worklist.values());
@@ -345,7 +505,7 @@ export class Context {
 			}
 		}
 
-		Context.is_eval = false;
+		Context.end_eval();
 		console.debug("Context.do_eval(): end");
 	}
 
@@ -363,114 +523,3 @@ export class Context {
 	}
 }
 
-class SrcNode extends Node {
-	/**
-	 * @returns{Iterable<string>}
-	 */
-	input_names() {
-		return [];
-	}
-
-	/**
-	 * @returns{Iterable<string>}
-	 */
-	output_names() {
-		return ["o"];
-	}
-
-	/**
-	 * @returns {Promise<Pinout | null>}
-	 */
-	async eval() {
-		if (this.value) {
-			const pinout = new Pinout();
-			pinout.set("o", this.value);
-			return pinout;
-		} else return null;
-	}
-
-	constructor() {
-		super();
-		this.value = null;
-	}
-
-	set_value(value) {
-		this.value = value;
-		Context.schedule_eval(this);
-	}
-}
-
-class DstNode extends Node {
-	/**
-	 * @returns{Iterable<string>}
-	 */
-	input_names() {
-		return ["o"];
-	}
-
-	/**
-	 * @returns{Iterable<string>}
-	 */
-	output_names() {
-		return [];
-	}
-
-	/**
-	 * @returns {Promise<Pinout | null>}
-	 */
-	async eval() {
-		this.value = null;
-		const e = this.single_input("o");
-		if (!e) return null;
-		this.value = await e.in_port.node.get(e.in_port.channel);
-		return null;
-	}
-
-	constructor() {
-		super();
-		this.value = null;
-	}
-}
-
-export async function test() {
-	const tests = [
-		{ fn: test_basic_usage, name: "basic" }
-	];
-
-	const max_timeout = 10;
-	const timeout = async (test_state) => {
-		const promise = new CallbackPromise();
-		setTimeout(() => test_state.ok || promise.trigger(), max_timeout * 1000);
-		await promise;
-		throw new Error("testing max_timeout reached");
-	};
-
-	let passed = 0;
-	for (const { name, fn } of tests) {
-		try {
-			const test_state = { ok: false };
-			await Promise.race([fn().then(() => test_state.ok = true), timeout(test_state)]);
-			passed++;
-			Context.clear();
-		} catch (e) {
-			console.error(`[graph::${name}]: failed:`, e);
-		}
-	}
-
-	if (passed === tests.length) {
-		console.error(`[graph]: all passed!`);
-	}
-}
-
-async function test_basic_usage() {
-	const a = new SrcNode();
-	const b = new DstNode();
-	Edge.connect(new Port(a, "out", "o"), new Port(b, "in", "o"));
-
-	await Context.do_eval();
-	console.assert(b.value === null);
-
-	a.set_value(69);
-	await Context.do_eval();
-	console.assert(b.value === 69);
-}

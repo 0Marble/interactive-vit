@@ -1,11 +1,12 @@
 export class CallbackPromise {
-	constructor() {
+	constructor(triggered) {
 		this.res = null;
 		this.rej = null;
 		this.promise = new Promise((res, rej) => {
 			this.res = res;
 			this.rej = rej;
 		});
+		if (triggered) this.trigger();
 	}
 
 	resolve(val) {
