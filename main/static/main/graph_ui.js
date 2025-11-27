@@ -87,7 +87,7 @@ class Edge {
 	}
 }
 
-class Port {
+export class Port {
 
 	/**
 	 * 

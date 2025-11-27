@@ -46,14 +46,16 @@ export class Conv2dNode extends dataflow.Node {
 	/**
 	 * @param {number|undefined} w 
 	 * @param {number|undefined} h 
-	 * @param {number[]|undefined} matrix 
+	 * @param {Float32Array|undefined} matrix 
 	 */
-	constructor() {
+	constructor(w, h, matrix) {
 		super();
 
-		this.w = 3;
-		this.h = 3;
+		this.w = w || 3;
+		this.h = h || 3;
 		this.matrix = new Float32Array(this.w * this.h);
+		if (matrix) this.matrix.set(matrix);
+
 		this.kernel = new gpu.Kernel(conv2d_src, [new gpu.UniformInfo("cfg", 4 * 4, 3)]);
 		this.matrix_tensor = new gpu.Tensor([this.h, this.w], 4, new Uint8Array(this.matrix.buffer));
 		this.matrix_changed = false;
@@ -96,33 +98,25 @@ export class Conv2dNode extends dataflow.Node {
 		this.div.appendChild(config_div);
 		this.div.appendChild(this.matrix_div);
 
-		console.assert(this.resize_matrix(this.w, this.h));
+		console.assert(this.draw_matrix());
 	}
 
-	resize_matrix(w, h) {
-		if (!dataflow.Context.can_edit()) return false;
-
-		this.w = w;
-		this.h = h;
-
-		this.matrix = new Float32Array(w * h);
-		this.matrix_changed = true;
-
+	draw_matrix() {
 		while (this.matrix_div.firstChild) this.matrix_div.firstChild.remove();
 
 		dataflow.Context.lock_eval();
 		const table = document.createElement("table");
 
-		for (let j = 0; j < h; j++) {
+		for (let j = 0; j < this.h; j++) {
 			const row = document.createElement("tr");
 			table.appendChild(row);
-			for (let i = 0; i < w; i++) {
+			for (let i = 0; i < this.w; i++) {
 				const data = document.createElement("td");
 				row.appendChild(data);
 				const input = document.createElement("input");
 				input.className = "matrix_entry";
 				input.type = "number";
-				input.value = this.matrix[j * w + i];
+				input.value = this.matrix[j * this.w + i];
 				input.addEventListener("change", () => {
 					this.set_matrix_element(i, j, +input.value);
 				});
@@ -134,6 +128,17 @@ export class Conv2dNode extends dataflow.Node {
 		dataflow.Context.unlock_eval();
 
 		return true;
+	}
+
+	resize_matrix(w, h) {
+		if (!dataflow.Context.can_edit()) return false;
+
+		this.w = w;
+		this.h = h;
+
+		this.matrix = new Float32Array(w * h);
+		this.matrix_changed = true;
+		this.draw_matrix();
 	}
 
 	set_matrix_element(i, j, x) {
