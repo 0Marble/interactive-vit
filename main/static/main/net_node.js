@@ -1,5 +1,5 @@
 
-import * as dataflow from "./dataflow.js";
+import * as graph from "./graph.js";
 import * as gpu from "./gpu.js";
 import * as csrf from "./csrf.js";
 
@@ -258,124 +258,101 @@ function add_padding(offset, align) {
 	return offset + align - m;
 }
 
-export class NetworkNode extends dataflow.Node {
-	static async load(endpoint) {
+export class NetworkNode extends graph.Node {
+	static async register_factory(endpoint) {
 		if (!NetworkNode.io_cache.has(endpoint)) {
-			const io = await fetch(`${endpoint}/description`, { method: "GET" })
-				.then(resp => resp.json())
-				.then(io => {
-					return IODescription.parse(io);
-				})
-				.catch(err => {
-					console.warn("Invalid IO description response:", err);
-				});
+			const resp = await fetch(`${endpoint}/description`, { method: "GET" });
+			const json = await resp.json();
+			const io = IODescription.parse(json);
 			NetworkNode.io_cache.set(endpoint, io);
 		}
+		const io = NetworkNode.io_cache.get(endpoint);
 
-		return new NetworkNode(endpoint);
+		const toolbar = document.getElementById("toolbar");
+
+		const node_button = document.createElement("button");
+		node_button.textContent = `New Net-${endpoint} Node`;
+		node_button.addEventListener("click", async () => {
+			const node = new NetworkNode(endpoint, io);
+			await node.fetch_node();
+		});
+		toolbar.appendChild(node_button);
 	}
+
 	/**
 	 * @type {Map<string, IODescription>
 	 */
 	static io_cache = new Map();
 
-	static io_for_init = undefined;
-
 	/**
 	 * @param {string} endpoint 
 	 * @param {IODescription} io 
 	 */
-	constructor(endpoint) {
-		const io = NetworkNode.io_cache.get(endpoint);
-		console.assert(NetworkNode.io_for_init === undefined);
-		NetworkNode.io_for_init = io;
+	constructor(endpoint, io) {
 		super();
-		console.assert(NetworkNode.io_for_init === io);
-		NetworkNode.io_for_init = undefined;
-
+		this.pre_init();
 
 		this.endpoint = endpoint;
-		this.div = document.createElement("div");
+		this.net_div = document.createElement("div");
 		/**
 		 * @type {IODescription}
 		 */
 		this.io = io;
-		/**
-		 * @type {Map<string, gpu.Tensor> | undefined}
-		 */
-		this.bufs = undefined;
+
+		this.post_init();
 	}
 
 	async fetch_node() {
-		while (this.div.firstChild) this.div.firstChild.remove();
+		while (this.net_div.firstChild) this.net_div.firstChild.remove();
 
-		this.div.innerHTML = "<p>Loading...</p>"
-		await fetch(`${this.endpoint}/contents`, { method: "GET" })
-			.then(resp => resp.text())
-			.then(html => {
-				this.div.innerHTML = html;
-			})
-			.catch(err => {
-				console.warn("Invalid IO description response:", err);
-				this.init_retry();
-			});
+		this.net_div.innerHTML = "<p>Loading...</p>"
+
+		try {
+			const resp = await fetch(`${this.endpoint}/contents`, { method: "GET" });
+			this.net_div.innerHTML = await resp.text();
+		} catch (err) {
+			console.warn("Invalid IO description response:", err);
+			this.init_retry();
+		}
 	}
 
 	init_retry() {
-		while (this.div.firstChild) this.div.firstChild.remove();
+		while (this.net_div.firstChild) this.net_div.firstChild.remove();
 		const button = document.createElement("button");
 		button.textContent = "Retry"
-		button.addEventListener("click", () => this.fetch_node());
-		this.div.appendChild(button);
+		button.addEventListener("click", async () => await this.fetch_node());
+		this.net_div.appendChild(button);
 	}
 
-	post_init(parent_div) {
-		console.assert(this.io);
-		parent_div.appendChild(this.div);
-	}
-
-	/**
-	 * @virtual
-	 * @returns {Iterable<string>}
-	 */
-	in_channel_names() {
-		const io = this.io || NetworkNode.io_for_init;
-		return io.in_names();
+	draw_content() {
+		this.content_div.appendChild(this.net_div);
 	}
 
 	/**
 	 * @virtual
 	 * @returns {Iterable<string>}
 	 */
-	out_channel_names() {
-		const io = this.io || NetworkNode.io_for_init;
-		return io.out_names();
+	input_names() {
+		return this.io.in_names();
 	}
 
 	/**
 	 * @virtual
+	 * @returns {Iterable<string>}
 	 */
-	invalidate_impl() {
-		this.bufs = undefined;
+	output_names() {
+		return this.io.out_names();
 	}
 
 	/**
 	 * @virtual
-	 * @returns {boolean}
+	 * @returns {Promise<graph.Pinout | null>}
 	 */
-	async eval_impl() {
-		console.debug(`NetworkNode.eval(${this.format()})`)
-		if (this.bufs) {
-			for (const [ch, t] of this.bufs) {
-				this.emit_result(ch, t);
-			}
-
-			return true;
-		}
-		this.bufs = new Map();
+	async eval() {
+		const pinout = new graph.Pinout();
 
 		const msg = new Message();
-		for (const ch of this.in_channel_names()) {
+		for (const ch of this.input_names()) {
 			let cnt = 0;
 			for (const edge of this.inputs(ch)) {
 				const tensor = await edge.read_packet();
@@ -384,57 +361,19 @@ export class NetworkNode extends dataflow.Node {
 				cnt++;
 			}
 			if (!this.io.channel_access_valid("in", ch, cnt)) {
-				return false;
+				console.error(`${this}: invalid number of inputs on input "${ch}"`);
+				return null;
 			}
 		}
 
-		dataflow.Context.acquire_edit_lock();
-		await msg.send(this.endpoint).then(() => {
-			for (let i = 0; i < msg.get_tensor_count(); i++) {
-				const t = msg.get_nth_tensor(i);
-				const ch = msg.get_nth_channel(i);
-				this.bufs.set(ch, t);
-				this.emit_result(ch, t);
-			}
-			dataflow.Context.release_edit_lock();
-		}).catch(err => {
-			console.warn("Evaluation error:", err);
-			this.retry_eval()
-		});
+		await msg.send(this.endpoint);
 
-		return true;
-	}
-
-	retry_eval() {
-	}
-
-	/**
-	 * @virtual
-	 * @returns {boolean}
-	 */
-	verify(_dir, _channel) {
-		for (const ch of this.in_channel_names()) {
-			let cnt = 0;
-			for (const _ of this.inputs(ch)) cnt++;
-			if (!this.io.channel_access_valid("in", ch, cnt) && cnt !== 0) {
-				return false;
-			}
-		}
-		for (const ch of this.out_channel_names()) {
-			let cnt = 0;
-			for (const _ of this.outputs(ch)) cnt++;
-			if (!this.io.channel_access_valid("out", ch, cnt) && cnt !== 0) {
-				return false;
-			}
+		for (let i = 0; i < msg.get_tensor_count(); i++) {
+			const t = msg.get_nth_tensor(i);
+			const ch = msg.get_nth_channel(i);
+			pinout.set(ch, t);
 		}
 
-		return true;
-	}
-
-	/**
-	 * @override
-	 */
-	kind() {
-		return "net_node";
+		return pinout;
 	}
 }

@@ -359,7 +359,7 @@ export class Node {
 	 * @param {string} channel 
 	 */
 	async get(channel) {
-		const pinout = await this.do_eval();
+		const pinout = await this.eval_internal();
 		if (!pinout) return null;
 		return pinout.get(channel);
 	}
@@ -368,7 +368,7 @@ export class Node {
 	 * Dont use this!
 	 * @returns {Promise<Pinout|null>}
 	 */
-	async do_eval() {
+	async eval_internal() {
 		Context.ensure_in_eval();
 		if (this.eval_state === null) {
 			console.debug(`${this}.eval()`);
@@ -486,7 +486,7 @@ export class Context {
 		 */
 		const worklist = new Map();
 		for (const node of Context.nodes_to_eval) {
-			worklist.set(node, node.do_eval().then(res => { return { node, res } }));
+			worklist.set(node, node.eval_internal().then(res => { return { node, res } }));
 		}
 		Context.nodes_to_eval.clear();
 
@@ -500,7 +500,7 @@ export class Context {
 				const node = e.out_port.node;
 
 				if (!worklist.has(node)) {
-					worklist.set(node, node.do_eval().then(res => { return { node, res } }));
+					worklist.set(node, node.eval_internal().then(res => { return { node, res } }));
 				}
 			}
 		}
