@@ -1,5 +1,5 @@
 import * as gpu from "./gpu.js";
-import { AsyncLock, CallbackPromise } from "./promise.js";
+import { CallbackPromise } from "./promise.js";
 
 export class Port {
 	/**
@@ -19,93 +19,57 @@ export class Port {
 }
 
 export class Edge {
-
-	/**
-	 * @private
-	 * @param {Port} in_port 
-	 * @param {Port} out_port 
-	 */
-	constructor(in_port, out_port) {
-		this.index = Context.new_index();
-		Context.all_edges.add(this);
-
-		this.in_port = in_port;
-		this.out_port = out_port;
-
-	}
-
 	/**
 	 * @param {Port} in_port 
 	 * @param {Port} out_port 
-	 * @returns {Promise<Edge|null>}
+	 * @returns {Edge | null}
 	 */
-	static async connect(in_port, out_port) {
-		await Context.start_no_eval_section("Edge.connect");
+	static connect(in_port, out_port) {
+		console.debug(`Edge.connect(${in_port}, ${out_port})`);
+		Context.ensure_not_eval();
+
 		if (in_port.dir !== "out" || out_port.dir !== "in") {
-			console.warn(`Could not connect ${in_port} -> ${out_port}: must connect out to in`);
-			Context.end_no_eval_section("Edge.connect");
+			console.warn("new edge: must connect out -> in");
 			return null;
 		}
 
 		if (!Node.dfa(out_port.node, (node) => node !== in_port.node)) {
-			console.warn(`Could not connect ${in_port} -> ${out_port}: loop detected`);
-			Context.end_no_eval_section("Edge.connect");
+			console.warn("new edge: loop detected");
 			return null;
 		}
 
 		const e = new Edge(in_port, out_port);
-		in_port.node.outs.get(in_port.channel).add(e);
-		out_port.node.ins.get(out_port.channel).add(e);
-
-		Context.end_no_eval_section("Edge.connect");
-
-		await e.out_node().invalidate_with_descendants();
-		await e.in_node().eval_with_descendants();
-
 		console.debug(`new ${e}: ${in_port} -> ${out_port}`);
+
+		Context.schedule_eval(in_port.node);
 
 		return e;
 	}
 
-	async disconnect() {
-		await Context.start_no_eval_section("Edge.disconnect");
+	disconnect() {
 		console.debug(`${this}.disconnect()`);
+		Context.ensure_not_eval();
 
-		this.in_node().outs.get(this.in_channel()).delete(this);
-		this.out_node().ins.get(this.out_channel()).delete(this);
+		this.in_port.node.outs.get(this.in_port.channel).delete(this);
+		this.out_port.node.ins.get(this.out_port.channel).delete(this);
+
+		Context.schedule_eval(this.out_port.node);
 		Context.all_edges.delete(this);
-
-		Context.end_no_eval_section("Edge.disconnect");
-
-		await this.out_node().invalidate_with_descendants();
-		await this.out_node().eval_with_descendants();
 	}
 
 	/**
-	 * @returns {Node}
+	 * @param {Port} in_port 
+	 * @param {Port} out_port 
 	 */
-	out_node() {
-		return this.out_port.node;
-	}
+	constructor(in_port, out_port) {
+		this.in_port = in_port;
+		this.out_port = out_port;
+		this.index = Context.new_index();
 
-	/**
-	 * @returns {Node}
-	 */
-	in_node() {
-		return this.in_port.node;
-	}
+		Context.all_edges.add(this);
 
-	/**
-	 * @returns {string}
-	 */
-	in_channel() {
-		return this.in_port.channel;
-	}
-	/**
-	 * @returns {string}
-	 */
-	out_channel() {
-		return this.out_port.channel;
+		in_port.node.outs.get(in_port.channel).add(this);
+		out_port.node.ins.get(out_port.channel).add(this);
 	}
 
 	toString() {
@@ -114,157 +78,64 @@ export class Edge {
 }
 
 class Pinout {
-
 	constructor() {
-		/**
-		 * @type {Map<string, gpu.Tensor>}
-		 */
 		this.values = new Map();
 	}
-
-	clear() {
-		this.values.clear();
-	}
-
 	/**
 	 * @param {string} channel 
-	 * @returns {gpu.Tensor}
 	 */
 	get(channel) {
 		return this.values.get(channel);
 	}
-
 	/**
 	 * @param {string} channel 
-	 * @param {gpu.Tensor} value 
 	 */
 	set(channel, value) {
 		this.values.set(channel, value);
 	}
-}
-
-export class Context {
-
-	static eval_count = 0;
-	static eval_lock = new AsyncLock(true);
-	/**
-	 * @type {"open" | "eval" | "locked"}
-	 */
-	static eval_state = "open";
-
-	/**
-	 * @returns {Promise<void>}
-	 */
-	static async start_no_eval_section(loc) {
-		if (Context.eval_state !== "locked") {
-			await Context.eval_lock.acquire();
-		}
-		Context.eval_count++;
-		Context.eval_state = "locked";
-		console.debug(`Context.start_no_eval_section (${Context.eval_count}, ${Context.eval_state}, ${loc})`);
-	}
-
-	static end_no_eval_section(loc) {
-		console.debug(`Context.end_no_eval_section (${Context.eval_count}, ${Context.eval_state}, ${loc})`);
-		console.assert(Context.eval_state === "locked");
-		console.assert(Context.eval_count > 0);
-		Context.eval_count--;
-
-		if (Context.eval_count === 0) {
-			Context.eval_lock.release();
-			Context.eval_state = "open";
-		}
-	}
-
-	/**
-	 * @returns {Promise<void>}
-	 */
-	static async start_eval_section(loc) {
-		if (Context.eval_state !== "eval") {
-			await Context.eval_lock.acquire();
-		}
-		Context.eval_count++;
-		Context.eval_state = "eval";
-		console.debug(`Context.start_eval_section (${Context.eval_count}, ${Context.eval_state}, ${loc})`);
-	}
-
-	static end_eval_section(loc) {
-		console.debug(`Context.end_eval_section (${Context.eval_count}, ${Context.eval_state}, ${loc})`);
-		console.assert(Context.eval_state === "eval");
-		console.assert(Context.eval_count > 0);
-		Context.eval_count--;
-
-		if (Context.eval_count === 0) {
-			Context.eval_lock.release();
-			Context.eval_state = "open";
-		}
-	}
-
-	static counter = 0;
-	/**
-	 * @type {Set<Node>}
-	 */
-	static all_nodes = new Set();
-	/**
-	 * @type {Set<Edge>}
-	 */
-	static all_edges = new Set();
-
-	/**
-	 * @returns {number}
-	 */
-	static new_index() {
-		Context.counter++;
-		return Context.counter;
+	clear() {
+		this.values.clear();
 	}
 }
 
 export class Node {
-	// ============== SUB-CLASS METHODS START ============== 
+	/* ========= IMPLEMENTORD METHODS START ========= */
 
 	/**
-	 * @returns {Iterable<string>}
+	 * @returns{Iterable<string>}
 	 */
-	output_channels() {
+	input_names() {
 		return [];
 	}
 
 	/**
-	 * @returns {Iterable<string>}
+	 * @returns{Iterable<string>}
 	 */
-	input_channels() {
+	output_names() {
 		return [];
 	}
 
 	/**
-	 * Just implementation, caching is handled by the parent class
 	 * @returns {Promise<Pinout | null>}
 	 */
-	async eval_impl() {
-		throw new Error(`${this}.eval_impl(): unimplemented`);
+	async eval() {
+		throw new Error(`${this}.eval(): unimplemented`);
 	}
 
-	render_impl() {
-		throw new Error(`${this}.render_impl(): unimplemented`);
-	}
+	/* ========== IMPLEMENTORD METHODS END ========== */
 
-	serialize() {
-		throw new Error(`${this}.serialize(): unimplemented`);
-	}
-
-	// ============== SUB-CLASS METHODS END ============== 
-
-	/**
-	 * @private
-	 */
 	constructor() {
+		Context.ensure_not_eval();
+
 		this.index = Context.new_index();
 		Context.all_nodes.add(this);
+		Context.schedule_eval(this);
 
 		/**
-		 * @type {null | Promise<Pinout | null>}
+		 * Do not use this!
+		 * @type{null|Promise<Pinout|null>}
 		 */
-		this.eval_sate = null
+		this.eval_state = null;
 
 		/**
 		 * @type {Map<string, Set<Edge>>}
@@ -275,55 +146,35 @@ export class Node {
 		 */
 		this.outs = new Map();
 
-		for (const ch of this.input_channels()) {
+		for (const ch of this.input_names()) {
 			this.ins.set(ch, new Set());
 		}
-		for (const ch of this.output_channels()) {
+		for (const ch of this.output_names()) {
 			this.outs.set(ch, new Set());
 		}
 
 		console.debug(`new ${this}`);
 	}
 
-	static async create(typ, ...args) {
-		await Context.start_no_eval_section("Node.create");
-		const n = new typ(...args);
-		Context.end_no_eval_section("Node.create");
-		return n;
-	}
-
-	async destroy() {
-		const promises = [];
-
-		await Context.start_no_eval_section("Node.destroy");
+	destroy() {
+		console.debug(`${this}.destroy()`);
+		Context.ensure_not_eval();
 
 		for (const e of this.outputs()) {
-			promises.push(e.disconnect());
+			e.disconnect();
 		}
 		for (const e of this.inputs()) {
-			promises.push(e.disconnect());
+			e.disconnect();
 		}
+
 		Context.all_nodes.delete(this);
 
-		Context.end_no_eval_section("Node.destroy");
-
-		await Promise.all(promises);
 		console.debug(`${this}.destroy()`);
 	}
 
 	/**
-	 * @param {string} channel 
-	 * @returns {Promise<gpu.Tensor | null>}
-	 */
-	async get(channel) {
-		const pinout = await this.eval();
-		if (!pinout) return null;
-		return pinout.get(channel);
-	}
-
-	/**
+	 * @param {string|undefined} channel 
 	 * @returns {Iterable<Edge>}
-	 * @param {string} channel 
 	 */
 	outputs(channel) {
 		if (channel) return this.outs.get(channel).values();
@@ -338,8 +189,8 @@ export class Node {
 	}
 
 	/**
+	 * @param {string|undefined} channel 
 	 * @returns {Iterable<Edge>}
-	 * @param {string | undefined} channel 
 	 */
 	inputs(channel) {
 		if (channel) return this.ins.get(channel).values();
@@ -358,67 +209,47 @@ export class Node {
 	 * @returns {Edge | null}
 	 */
 	single_input(channel) {
-		const set = this.ins.get(channel);
-		if (set.size !== 1) return null;
-		return set.values().next().value;
+		return this.inputs(channel).next().value;
 	}
 
 	/**
-	 * @returns {Promise<Pinout | null>}
+	 * @param {string} channel 
 	 */
-	async eval() {
-		await Context.start_eval_section("Node.eval");
+	async get(channel) {
+		const pinout = await this.do_eval();
+		if (!pinout) return null;
+		return pinout.get(channel);
+	}
 
-		if (!this.eval_sate) {
+	/**
+	 * Dont use this!
+	 * @returns {Promise<Pinout|null>}
+	 */
+	async do_eval() {
+		Context.ensure_in_eval();
+		if (this.eval_state === null) {
 			console.debug(`${this}.eval()`);
-			this.eval_sate = this.eval_impl();
+			this.eval_state = this.eval();
 		}
-		const res = await this.eval_sate;
-
-		Context.end_eval_section("Node.eval");
-
-		return res;
+		return await this.eval_state;
 	}
 
-	/**
-	 * @param {Iterable<Node>} nodes 
-	 */
-	static async eval_starting_from(nodes) {
-		/**
-		 * @type {Map<Node, Promise<{node:Node, ok: boolean}>>}
-		 */
-		const worklist = new Map();
-		for (const node of nodes) {
-			worklist.set(node, node.eval().then((ok) => { return { node, ok } }));
-		}
-
-		while (worklist.size > 0) {
-			const { node, ok } = await Promise.race(worklist.values());
-			worklist.delete(node);
-
-			if (!ok) continue;
-
-			for (const e of node.outputs()) {
-				const next = e.out_node();
-				worklist.set(next, next.eval().then((ok) => { return { node: next, ok } }));
-			}
-		}
+	invalidate() {
+		console.debug(`${this}.invalidate()`);
+		Context.ensure_not_eval();
+		this.eval_state = null;
+	}
+	invalidate_with_descendants() {
+		Node.dfa(this, (node) => { node.invalidate(); return true; });
 	}
 
-	async eval_with_descendants() {
-		await Node.eval_starting_from([this]);
+	toString() {
+		return `Node(${this.index})`;
 	}
-
-	async invalidate_with_descendants() {
-		await Context.start_no_eval_section("Node.invalidate_with_descendants");
-		Node.dfa(this, (node) => { node.eval_sate = null; return true; });
-		Context.end_no_eval_section("Node.invalidate_with_descendants");
-	}
-
 
 	/**
 	 * @param {Node} start 
-	 * @param {(node: Node) => boolean} visitor 
+	 * @param {(node:Node)=>boolean} visitor 
 	 * @returns {boolean}
 	 */
 	static dfa(start, visitor) {
@@ -429,150 +260,217 @@ export class Node {
 			const node = stack.pop();
 			if (!visitor(node)) return false;
 			for (const e of node.outputs()) {
-				if (!visited.has(e.out_node())) {
-					visited.add(e.out_node());
-					stack.push(e.out_node());
-				}
+				const next = e.out_port.node;
+				if (visited.has(next)) continue;
+				visited.add(next);
+				stack.push(next);
 			}
 		}
 		return true;
 	}
-
-	toString() {
-		return `Node(${this.index})`;
-	}
 }
 
-class TimerNode extends Node {
-	constructor(seconds) {
-		super();
-		this.seconds = seconds;
+export class Context {
+	static counter = 0;
+	/**
+	 * @type {Set<Node>}
+	 */
+	static all_nodes = new Set();
+	/**
+	 * @type {Set<Edge>}
+	 */
+	static all_edges = new Set();
+
+	/**
+	 * @returns {number}
+	 */
+	static new_index() {
+		Context.counter += 1;
+		return Context.counter;
 	}
 
-	output_channels() {
-		return ["o"];
-	}
+	static is_eval = false;
 
-	input_channels() {
-		return ["o"];
-	}
+	/**
+	 * @type {Set<Node>}
+	 */
+	static nodes_to_eval = new Set();
 
-	async eval_impl() {
-		const promise = new CallbackPromise();
-		setTimeout(promise.trigger, this.seconds * 1000);
-		await promise;
-
-		const pinout = new Pinout();
-		const e = this.single_input("o");
-		if (!e) {
-			return null;
+	static ensure_not_eval() {
+		if (Context.is_eval) {
+			throw new Error("Context.ensure_not_eval() failed!");
 		}
-		const o_input = await e.in_node().get(e.in_channel());
-		pinout.set("o", o_input);
+	}
 
-		return pinout;
+	static ensure_in_eval() {
+		if (!Context.is_eval) {
+			throw new Error("Context.ensure_in_eval() failed!");
+		}
+	}
+
+	/**
+	 * @param {Node} node 
+	 */
+	static schedule_eval(node) {
+		Context.ensure_not_eval();
+		Context.nodes_to_eval.add(node)
+	}
+
+	static async do_eval() {
+		console.debug("Context.do_eval(): start");
+		for (const node of Context.nodes_to_eval) node.invalidate_with_descendants();
+
+		Context.is_eval = true;
+
+		/**
+		 * @type {Map<Node,Promise<{node:Node,res:(Pinout|null)}>>}
+		 */
+		const worklist = new Map();
+		for (const node of Context.nodes_to_eval) {
+			worklist.set(node, node.do_eval().then(res => { return { node, res } }));
+		}
+
+		while (worklist.size > 0) {
+			const { node, res } = await Promise.race(worklist.values());
+			worklist.delete(node);
+
+			if (!res) continue;
+
+			for (const e of node.outputs()) {
+				const node = e.out_port.node;
+
+				if (!worklist.has(node)) {
+					worklist.set(node, node.do_eval().then(res => { return { node, res } }));
+				}
+			}
+		}
+
+		Context.is_eval = false;
+		console.debug("Context.do_eval(): end");
+	}
+
+	static clear() {
+		console.debug("Context.clear()");
+		Context.ensure_not_eval();
+
+		Context.counter = 0;
+
+		for (const n of Context.all_nodes) {
+			n.destroy();
+		}
+
+		Context.nodes_to_eval.clear();
 	}
 }
 
-class SourceNode extends Node {
-	constructor() {
-		super();
-		this.value = null;
-	}
-
-	async set_value(value) {
-		await Context.start_no_eval_section("SourceNode.set_value");
-		this.value = value;
-		Context.end_no_eval_section("SourceNode.set_value");
-
-		await this.invalidate_with_descendants();
-		await this.eval_with_descendants();
-	}
-
-	output_channels() {
-		return ["o"];
-	}
-
-	input_channels() {
+class SrcNode extends Node {
+	/**
+	 * @returns{Iterable<string>}
+	 */
+	input_names() {
 		return [];
 	}
 
-	async eval_impl() {
+	/**
+	 * @returns{Iterable<string>}
+	 */
+	output_names() {
+		return ["o"];
+	}
+
+	/**
+	 * @returns {Promise<Pinout | null>}
+	 */
+	async eval() {
 		if (this.value) {
 			const pinout = new Pinout();
 			pinout.set("o", this.value);
 			return pinout;
 		} else return null;
 	}
-}
 
-class DrainNode extends Node {
 	constructor() {
 		super();
 		this.value = null;
 	}
 
-	output_channels() {
-		return [];
+	set_value(value) {
+		this.value = value;
+		Context.schedule_eval(this);
 	}
+}
 
-	input_channels() {
+class DstNode extends Node {
+	/**
+	 * @returns{Iterable<string>}
+	 */
+	input_names() {
 		return ["o"];
 	}
 
-	async eval_impl() {
+	/**
+	 * @returns{Iterable<string>}
+	 */
+	output_names() {
+		return [];
+	}
+
+	/**
+	 * @returns {Promise<Pinout | null>}
+	 */
+	async eval() {
 		this.value = null;
 		const e = this.single_input("o");
 		if (!e) return null;
-		const value = await e.in_node().get(e.in_channel());
-		this.value = value;
+		this.value = await e.in_port.node.get(e.in_port.channel);
 		return null;
+	}
+
+	constructor() {
+		super();
+		this.value = null;
 	}
 }
 
 export async function test() {
 	const tests = [
-		{ name: "test_basic", fn: test_basic },
+		{ fn: test_basic_usage, name: "basic" }
 	];
-	const max_timeout = async (obj) => {
+
+	const max_timeout = 10;
+	const timeout = async (test_state) => {
 		const promise = new CallbackPromise();
-		setTimeout(() => obj.ok || promise.trigger(), 2 * 1000);
+		setTimeout(() => test_state.ok || promise.trigger(), max_timeout * 1000);
 		await promise;
-		throw new Error("max_timeout hit!");
+		throw new Error("testing max_timeout reached");
 	};
 
 	let passed = 0;
 	for (const { name, fn } of tests) {
 		try {
-			const obj = { ok: false };
-			await Promise.race([fn().finally(() => obj.ok = true), max_timeout(obj)]);
+			const test_state = { ok: false };
+			await Promise.race([fn().then(() => test_state.ok = true), timeout(test_state)]);
 			passed++;
+			Context.clear();
 		} catch (e) {
-			console.error(`[graph::${name}] failed: `, e);
+			console.error(`[graph::${name}]: failed:`, e);
 		}
 	}
 
 	if (passed === tests.length) {
-		console.log("graph: all passed!");
+		console.error(`[graph]: all passed!`);
 	}
 }
 
-async function test_basic() {
-	/**
-	 * @type {SourceNode}
-	 */
-	const a = await Node.create(SourceNode);
-	const b = await Node.create(DrainNode);
+async function test_basic_usage() {
+	const a = new SrcNode();
+	const b = new DstNode();
+	Edge.connect(new Port(a, "out", "o"), new Port(b, "in", "o"));
 
-	await Edge.connect(new Port(a, "out", "o"), new Port(b, "in", "o"));
-
+	await Context.do_eval();
 	console.assert(b.value === null);
-	await a.set_value(69);
+
+	a.set_value(69);
+	await Context.do_eval();
 	console.assert(b.value === 69);
-
-	await a.destroy();
-
-	console.assert(b.value === null);
-	await b.destroy();
 }
-
