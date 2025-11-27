@@ -115,6 +115,9 @@ export class Port {
 
 export class Node {
 	static counter = 0;
+	/**
+	 * @type {Set<Node>}
+	 */
 	static all_nodes = new Set();
 	static current_selected_port = null;
 

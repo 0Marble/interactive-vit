@@ -114,4 +114,11 @@ export class ImgSourceNode extends dataflow.Node {
 	out_channel_names() {
 		return ["R", "G", "B"];
 	}
+
+	/**
+	 * @override
+	 */
+	kind() {
+		return "img_src";
+	}
 }

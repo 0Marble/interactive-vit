@@ -233,6 +233,13 @@ export class Conv2dNode extends dataflow.Node {
 		if (len > 1) return false;
 		return true;
 	}
+
+	/**
+	 * @override
+	 */
+	kind() {
+		return "conv2d";
+	}
 }
 
 

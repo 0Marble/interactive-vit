@@ -430,4 +430,11 @@ export class NetworkNode extends dataflow.Node {
 
 		return true;
 	}
+
+	/**
+	 * @override
+	 */
+	kind() {
+		return "net_node";
+	}
 }

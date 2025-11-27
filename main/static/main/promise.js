@@ -1,34 +1,50 @@
-
-/**
- *
- * Gets resolved when the `resolve` method is called
- */
 export class CallbackPromise {
 	constructor() {
-		this.callbacks = [];
-		this.error_handler = null;
+		this.res = null;
+		this.rej = null;
+		this.promise = new Promise((res, rej) => {
+			this.res = res;
+			this.rej = rej;
+		});
 	}
 
-	then(then_callback) {
-		this.callbacks.push(then_callback);
+	resolve(val) {
+		this.res(val);
 		return this;
 	}
-	catch(catch_callback) {
-		this.error_handler = catch_callback;
+
+	trigger(val) {
+		return this.resolve(val);
 	}
 
-	trigger() {
-		let value = undefined;
-		try {
-			for (const callback of this.callbacks) {
-				value = callback(value);
-			}
-		} catch (err) {
-			if (this.error_handler) {
-				this.error_handler(err);
-			} else {
-				throw err;
-			}
-		}
+	reject(val) {
+		this.rej(val);
+		return this;
+	}
+
+	then(on_fulfilled, on_rejected) {
+		return this.promise.then(on_fulfilled, on_rejected);
+	}
+	catch(on_rejected) {
+		return this.promise.catch(on_rejected);
+	}
+	finally(on_finally) {
+		return this.promise.finally(on_finally);
+	}
+}
+
+export class AsyncLock {
+	constructor(open) {
+		this.promise = new CallbackPromise();
+		if (open) this.promise.trigger();
+	}
+
+	async acquire() {
+		await this.promise;
+		this.promise = new CallbackPromise();
+	}
+
+	release() {
+		this.promise.trigger();
 	}
 }

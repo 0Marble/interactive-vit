@@ -143,4 +143,11 @@ export class ImgViewNode extends dataflow.Node {
 	in_channel_names() {
 		return ["R", "G", "B"];
 	}
+
+	/**
+	 * @override
+	 */
+	kind() {
+		return "img_view";
+	}
 }

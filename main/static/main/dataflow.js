@@ -273,6 +273,13 @@ export class Node {
 		return true;
 	}
 
+	/**
+	 * returns an object to be turned into a JSON string later
+	 */
+	serialize() {
+		return {};
+	}
+
 	//// ================ CUSTOM IMPLEMENTATION END ================ 
 
 	/**
