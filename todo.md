@@ -1,23 +1,26 @@
 # Critical
 
-- ability to save/share graphs
-    1. A (super-) user designs a graph locally, then it is possible to save and run it on the server.
-        - How can we design a very expensive graph locally?
-    2. It should also be possible to design a graph non-interactively (json file), so the system operators can create expensive networks.
-    3. Gradual implementation: it is much easier to make a server-side node than a client-side node, since client side nodes need custom WebGPU kernels, and on the server we may just use pytorch.
-
 - models: implement a model using server-side nodes
     1. VGG16: looks simple, will get me familiar with the concepts in the field
+- Slice node: `out = in[:, 10, 20]`.
+- Swizzle node: ability to change the order of dimensions `out = in.yxz`. 
+- Zeros node: create a new empty tensor of given shape.
+- Stack node: `out = [a, b, c, d, ...]`. This is tricky, because we only support a pre-defined number of ports.
+    1. "Fake" ports: create ports within the content div of the node. Hacky...
+    2. Proper dynamic ports support: sounds possible, but there is a large surface for unforseen issues
 
 # Non-critical
 
+- `net_node` scripting: is it possible to send over logic together with `net_node` contents? 
 - keep track of sizes on the client
 - server-side graph: whole sections of the computation graph can be evaluated on the server, without data going back and forth
+- Admin panel: ability to upload custom client-desgined graphs
 
 # Log
 
 - 28.11.2025:
     1. Save/Share graphs part 1: save/load on the client
+    2. Ability to load graphs from the server
 
 - 27.11.2025:
     1. Experimented with different node APIs. 

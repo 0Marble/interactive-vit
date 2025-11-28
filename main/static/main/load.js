@@ -59,7 +59,7 @@ async function fetch_model_list(modal, list_div) {
 		const retry = document.createElement("button");
 		retry.textContent = "Retry";
 		retry.addEventListener("click", () => {
-			fetch_model_list(list_div);
+			fetch_model_list(modal, list_div);
 		});
 		list_div.appendChild(retry);
 	}
