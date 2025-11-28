@@ -141,7 +141,7 @@ class Message {
 	async send(endpoint) {
 		const buf = await this.encode();
 
-		const resp = await fetch(`${endpoint}/compute`, {
+		const resp = await fetch(`node/${endpoint}/compute`, {
 			method: "POST",
 			body: buf,
 			headers: {
@@ -288,7 +288,7 @@ export class NetworkNode extends graph.Node {
 		this.net_div.innerHTML = "<p>Loading...</p>"
 
 		try {
-			const resp = await fetch(`${this.endpoint}/contents`, { method: "GET" });
+			const resp = await fetch(`node/${this.endpoint}/contents`, { method: "GET" });
 			if (!resp.ok) throw new Error("response not ok");
 			this.net_div.innerHTML = await resp.text();
 			this.on_visual_update();
@@ -372,7 +372,7 @@ export class NetworkNode extends graph.Node {
 		await graph.Context.wait_for_not_in_eval();
 
 		if (!NetworkNode.io_cache.has(endpoint)) {
-			const resp = await fetch(`${endpoint}/description`, { method: "GET" });
+			const resp = await fetch(`node/${endpoint}/description`, { method: "GET" });
 			const json = await resp.json();
 			const io = IODescription.parse(json);
 			NetworkNode.io_cache.set(endpoint, io);

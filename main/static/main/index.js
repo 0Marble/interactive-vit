@@ -14,7 +14,7 @@ async function init_toolbar() {
 	toolbar.appendChild(await ImgSourceNode.register_factory());
 	toolbar.appendChild(await ImgViewNode.register_factory());
 	toolbar.appendChild(await Conv2dNode.register_factory());
-	toolbar.appendChild(await NetworkNode.register_factory("dummy"));
+	toolbar.appendChild(await NetworkNode.register_factory("cos"));
 
 	const load = document.createElement("input");
 	load.textContent = "Load";

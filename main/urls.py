@@ -1,11 +1,40 @@
 from django.urls import path
+from django.conf import settings
 
 from . import views
 
+import importlib
+import os
+import logging
+import sys
+
+logger = logging.getLogger(__name__)
+
 urlpatterns = [
-    path("hello", views.hello_world, name="hello_world"),
     path("", views.index, name="index"),
-    path("dummy/description", views.dummy_description, name="dummy-description"),
-    path("dummy/contents", views.dummy_contents, name="dummy-contents"),
-    path("dummy/compute", views.dummy_compute, name="dummy-compute"),
 ] 
+
+nodes_dir = os.path.join(settings.BASE_DIR, "main/nodes")
+
+for file in os.listdir(nodes_dir):
+    file = os.path.join(nodes_dir, file)
+    if not os.path.isfile(file) or not file.endswith(".py"): continue
+
+
+    file_dir, file_name = os.path.split(file)
+    name, _ = os.path.splitext(file_name)
+
+    endpoint = f"node/{name}"
+    logger.error("Found node file: '%s' -> %s", name, endpoint)
+
+    logger.error(file)
+    spec = importlib.util.spec_from_file_location(name, file)
+    if spec is None:
+        raise ImportError(f"Could not load spec from {file}")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
+    spec.loader.exec_module(mod)
+
+    urlpatterns.append(path(f"{endpoint}/description", mod.description, name=f"node-{name}-description"))
+    urlpatterns.append(path(f"{endpoint}/contents", mod.contents, name=f"node-{name}-contents"))
+    urlpatterns.append(path(f"{endpoint}/compute", mod.compute, name=f"node-{name}-compute"))
