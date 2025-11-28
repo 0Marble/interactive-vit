@@ -1,5 +1,6 @@
 import * as gpu from "./gpu.js";
 import * as graph from "./graph.js";
+import { init_loader } from "./load.js";
 
 import { ImgSourceNode } from "./nodes/img_source_node.js";
 import { ImgViewNode } from "./nodes/img_view_node.js";
@@ -17,22 +18,7 @@ async function init_toolbar() {
 	toolbar.appendChild(await NetworkNode.register_factory("cos", { A: 2.0, b: 1.0 }));
 	toolbar.appendChild(await NetworkNode.register_factory("conv", {}));
 
-	const load = document.createElement("input");
-	load.textContent = "Load";
-	load.type = "file";
-	load.accept = "application/json";
-	load.addEventListener("change", () => {
-		let reader = new FileReader();
-		reader.readAsText(load.files[0]);
-		reader.addEventListener("load", async (e) => {
-			await graph.Context.wait_for_not_in_eval();
-			let src = e.target.result;
-			let obj = JSON.parse(src);
-			await graph.Context.deserialize(obj);
-			await graph.Context.do_eval();
-		});
-	});
-	toolbar.appendChild(load);
+	toolbar.appendChild(await init_loader());
 
 	const save = document.createElement("button");
 	save.textContent = "Save";

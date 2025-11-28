@@ -41,11 +41,12 @@ def load_model(request: http.HttpRequest):
         model_path = os.path.join(all_models_path, model_name)
         if not verify_model(model_path): raise Exception(f"{model_name}: no such model")
 
-        with open(os.path.join(model_path, "graph.json")) as f:
-            resp = http.HttpResponse(f.readall())
-            resp.headers["Content-Type"] = "application/json"
-            return resp
+        f = open(os.path.join(model_path, "graph.json")) 
+        resp = http.HttpResponse(f.read())
+        resp.headers["Content-Type"] = "application/json"
+        return resp
 
     except Exception as e:
+        logger.error(e)
         return http.HttpResponseBadRequest(str(e))
 
