@@ -2,51 +2,72 @@ class Runtime {
 	static device = undefined;
 }
 
-export class UniformInfo {
+export class UniformBinding {
 	/**
-	 * @param {string} name
+	 * @param {string} name 
 	 * @param {number} byte_size
 	 * @param {number} binding
+	 * @param {number} group 
 	 */
-	constructor(name, byte_size, binding) {
+	constructor(name, group, binding, byte_size) {
 		this.name = name;
 		this.byte_size = byte_size;
 		this.binding = binding;
-		this.buffer = null;
+		this.group = group;
+
+		this.buf = Runtime.device.createBuffer({
+			size: this.byte_size,
+			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+		});
+	}
+}
+
+class Group {
+	/**
+	 * @param {number} n 
+	 */
+	constructor(n, pipeline) {
+		this.n = n;
+		this.handle = null;
+		this.pipeline = pipeline;
+
+		/**
+		 * @type {Map<number, any>}
+		 */
+		this.buffers = new Map();
+	}
+
+	set(binding, buffer) {
+		this.handle = null;
+		this.buffers.set(binding, buffer);
+	}
+
+	get_handle() {
+		if (this.handle) return this.handle;
+
+		const entries = [];
+		for (const [binding, buffer] of this.buffers) {
+			entries.push({ binding, resource: { buffer } });
+		}
+		this.handle = Runtime.device.createBindGroup({
+			layout: this.pipeline.getBindGroupLayout(this.n),
+			entries,
+		});
+		return this.handle;
 	}
 }
 
 export class Kernel {
 	/**
 	 * @param {string} source 
-	 * @param {UniformInfo[] | undefined} uniforms
+	 * @param {UniformBinding[]|undefined} uniforms 
 	 */
 	constructor(source, uniforms) {
 		this.kernel = Runtime.device.createShaderModule({
 			code: source,
 		});
-		/**
-		 * @type {Map<string, UniformInfo>}
-		 */
-		this.uniforms = new Map();
 
-		if (uniforms) {
-			for (const uni of uniforms) {
-				const buf = Runtime.device.createBuffer({
-					size: uni.byte_size,
-					usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-				});
-				uni.buffer = buf;
-				this.uniforms.set(uni.name, uni);
-			}
-		}
-	}
-
-	/**
-	 * @param {{binding: number, tensor: Tensor}[]} args
-	 */
-	run(args, workgroups_count) {
-		const pipeline = Runtime.device.createComputePipeline({
+		this.pipeline = Runtime.device.createComputePipeline({
 			layout: "auto",
 			compute: {
 				module: this.kernel,
@@ -54,26 +75,45 @@ export class Kernel {
 			},
 		});
 
-		const entries = [];
-		for (const { binding, buffer } of this.uniforms.values()) {
-			entries.push({ binding, resource: { buffer } });
-		}
-		for (const { binding, tensor } of args) {
-			entries.push({ binding, resource: { buffer: tensor.handle } });
-		}
+		/**
+		 * @type {Map<number, Group>}
+		 */
+		this.groups = new Map();
+		/**
+		 * @type {Map<string, UniformBinding>}
+		 */
+		this.uniforms = new Map();
 
-		const group = Runtime.device.createBindGroup({
-			layout: pipeline.getBindGroupLayout(0),
-			entries,
-		});
+		if (uniforms) {
+			for (const uni of uniforms) {
+				this.uniforms.set(uni.name, uni);
+				this.set_binding(uni.group, uni.binding, uni.buf);
+			}
+		}
+	}
 
-		const cmd = Runtime.device.createCommandEncoder();
-		const pass = cmd.beginComputePass();
-		pass.setPipeline(pipeline);
-		pass.setBindGroup(0, group);
-		pass.dispatchWorkgroups(workgroups_count);
-		pass.end();
-		Runtime.device.queue.submit([cmd.finish()]);
+	/**
+	 * @param {number} group 
+	 * @param {number} binding
+	 * @private
+	 */
+	set_binding(group, binding, buffer) {
+		if (!this.groups.has(group)) {
+			this.groups.set(group, new Group(group, this.pipeline));
+		}
+		const g = this.groups.get(group);
+		g.set(binding, buffer);
+	}
+
+	/**
+	 * @param {number} group 
+	 * @param {number} binding_offset 
+	 * @param {Tensor} tensor 
+	 */
+	set_tensor(group, binding_offset, tensor) {
+		this.set_binding(group, binding_offset + 0, tensor.data_buffer);
+		this.set_binding(group, binding_offset + 1, tensor.size_buffer);
+		this.set_binding(group, binding_offset + 2, tensor.offsets_buffer);
 	}
 
 	/**
@@ -82,7 +122,24 @@ export class Kernel {
 	 */
 	set_uniform(name, value) {
 		const uni = this.uniforms.get(name);
-		Runtime.device.queue.writeBuffer(uni.buffer, 0, value);
+		Runtime.device.queue.writeBuffer(uni.buf, 0, value);
+	}
+
+	/**
+	 * @param {number[]} workgroups_count
+	 */
+	run(workgroups_count) {
+		const cmd = Runtime.device.createCommandEncoder();
+		const pass = cmd.beginComputePass();
+		pass.setPipeline(this.pipeline);
+
+		for (const group of this.groups.values()) {
+			pass.setBindGroup(group.n, group.get_handle());
+		}
+
+		pass.dispatchWorkgroups(...workgroups_count);
+		pass.end();
+		Runtime.device.queue.submit([cmd.finish()]);
 	}
 }
 
@@ -94,24 +151,46 @@ export class Tensor {
 	 */
 	constructor(dims, elem_size, value) {
 		this.dims = dims;
+		this.offsets = [];
+
 		this.elem_size = elem_size;
 		this.byte_size = elem_size;
 		this.elem_cnt = 1;
 		for (const m of dims) {
 			this.byte_size *= m;
 			this.elem_cnt *= m;
+			this.offsets.push(1);
+		}
+		for (let i = 1; i < this.dims.length; i++) {
+			const j = this.dims.length - i - 1;
+			this.offsets[j] = this.offsets[j + 1] * this.dims[j + 1];
 		}
 
-		this.handle = Runtime.device.createBuffer({
+		this.data_buffer = Runtime.device.createBuffer({
 			size: this.byte_size,
 			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
 			mappedAtCreation: (value ? true : false),
 		});
+		this.size_buffer = Runtime.device.createBuffer({
+			size: this.dims.length * 4,
+			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+			mappedAtCreation: true,
+		});
+		this.offsets_buffer = Runtime.device.createBuffer({
+			size: this.offsets.length * 4,
+			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+			mappedAtCreation: true,
+		});
 
 		if (value) {
-			new Uint8Array(this.handle.getMappedRange()).set(value);
-			this.handle.unmap();
+			new Uint8Array(this.data_buffer.getMappedRange()).set(value);
+			this.data_buffer.unmap();
 		}
+
+		new Uint8Array(this.size_buffer.getMappedRange()).set(this.dims);
+		this.size_buffer.unmap();
+		new Uint8Array(this.offsets_buffer.getMappedRange()).set(this.offsets);
+		this.offsets_buffer.unmap();
 	}
 
 	/**
@@ -126,7 +205,7 @@ export class Tensor {
 		this.elem_size = new_tensor.elem_size;
 		this.byte_size = new_tensor.byte_size;
 		this.elem_cnt = new_tensor.elem_cnt;
-		this.handle = new_tensor.handle;
+		this.data_buffer = new_tensor.data_buffer;
 	}
 
 	/**
@@ -155,7 +234,7 @@ export class Tensor {
 			usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
 		});
 		const cmd = Runtime.device.createCommandEncoder();
-		cmd.copyBufferToBuffer(this.handle, staging, this.byte_size);
+		cmd.copyBufferToBuffer(this.data_buffer, staging, this.byte_size);
 		Runtime.device.queue.submit([cmd.finish()]);
 		await staging.mapAsync(GPUMapMode.READ, 0, this.byte_size);
 		const res = staging.getMappedRange(0, this.byte_size).slice(0)
@@ -167,7 +246,7 @@ export class Tensor {
 	 * @param {ArrayBuffer} data 
 	 */
 	from_cpu(data) {
-		Runtime.device.queue.writeBuffer(this.handle, 0, data);
+		Runtime.device.queue.writeBuffer(this.data_buffer, 0, data);
 	}
 }
 
@@ -193,3 +272,22 @@ export async function init() {
 	Runtime.device = device;
 }
 
+
+/**
+ * @param {number} group 
+ * @param {number} binding_offset 
+ * @param {string} name 
+ * @param {string} type 
+ * @param {number} dim 
+ * @param {string} access 
+ */
+export function shader_tesnor_def(group, binding_offset, access, name, type, dim) {
+	return `
+@group(${group}) @binding(${binding_offset})
+var<storage, ${access}> ${name}: array<${type}>;
+@group(${group}) @binding(${binding_offset + 1})
+var<uniform> ${name}_size: array<${dim}, u32>;
+@group(${group}) @binding(${binding_offset + 2})
+var<uniform> ${name}_offset: array<${dim}, u32>;
+`;
+}

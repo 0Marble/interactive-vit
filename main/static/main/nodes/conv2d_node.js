@@ -2,38 +2,22 @@ import * as graph from "../graph.js";
 import * as gpu from "../gpu.js";
 
 const conv2d_src = `
-@group(0) @binding(0)
-var<storage, read> input: array<f32>;
-@group(0) @binding(1)
-var<storage, read> kernel: array<f32>;
-@group(0) @binding(2)
-var<storage, read_write> output: array<f32>;
-
-struct Config {
-	input_w: u32,
-	input_h: u32,
-	kernel_w: u32,
-	kernel_h: u32,
-}
-@group(0) @binding(3)
-var<uniform> cfg: Config;
+${gpu.shader_tesnor_def(0, 0, "read", "input", "f32", 2)}
+${gpu.shader_tesnor_def(1, 0, "read", "weight", "f32", 2)}
+${gpu.shader_tesnor_def(2, 0, "read_write", "output", "f32", 2)}
 
 override WRK_SIZE = 64;
-@compute @workgroup_size(WRK_SIZE)
+@compute @workgroup_size(WRK_SIZE, WRK_SIZE)
 fn main(@builtin(global_invocation_id) id: vec3u) {
-	var output_w = cfg.input_w - 2 * (cfg.kernel_w / 2);
-	var output_h = cfg.input_h - 2 * (cfg.kernel_h / 2);
-	var x = id.x % output_w;
-	var y = id.x / output_w;
-	if (y >= output_h) {
-		return;
-	}
+	var x = id.x;
+	var y = id.y;
+	if (x >= output_size[1] || y >= output_size[0]) return;
 	
 	var sum: f32 = 0.0;
-	for (var j: u32 = 0; j < cfg.kernel_h; j++) {
-		for (var i: u32 = 0; i < cfg.kernel_w; i++) {
-			var a = input[(y + j) * cfg.input_w + (x + i)];
-			var b = kernel[j * cfg.kernel_w + i];
+	for (var j: u32 = 0; j < weight_size[1]; j++) {
+		for (var i: u32 = 0; i < weight_size[0]; i++) {
+			var a = input[(y + j) * input_offset[1] + (x + i) * input_offset[0]];
+			var b = weight[j * weight_offset[1] + i * weight_offset[0]];
 			sum += a * b;
 		}
 	}
@@ -57,9 +41,12 @@ export class Conv2dNode extends graph.Node {
 		this.matrix = new Float32Array(this.w * this.h);
 		if (matrix) this.matrix.set(matrix);
 
-		this.kernel = new gpu.Kernel(conv2d_src, [new gpu.UniformInfo("cfg", 4 * 4, 3)]);
+		this.kernel = new gpu.Kernel(conv2d_src);
+
 		this.matrix_tensor = new gpu.Tensor([this.h, this.w], 4, new Uint8Array(this.matrix.buffer));
 		this.matrix_changed = false;
+		this.kernel.set_tensor(1, 0, this.matrix_tensor);
+
 		this.matrix_div = document.createElement("div");
 
 		this.post_init();
@@ -188,18 +175,20 @@ export class Conv2dNode extends graph.Node {
 			],
 			4,
 		);
-		this.kernel.set_uniform("cfg", new Uint32Array([size.w, size.h, this.w, this.h]).buffer);
 
 		if (this.matrix_changed) {
 			this.matrix_changed = false;
 			this.matrix_tensor = new gpu.Tensor([this.h, this.w], 4, new Uint8Array(this.matrix.buffer));
+			this.kernel.set_tensor(1, 0, this.matrix_tensor);
 		}
 
+		this.kernel.set_tensor(0, 0, input);
+		this.kernel.set_tensor(2, 0, output);
+
 		this.kernel.run([
-			{ binding: 0, tensor: input },
-			{ binding: 1, tensor: this.matrix_tensor },
-			{ binding: 2, tensor: output },
-		], Math.ceil(output.elem_cnt / 64));
+			Math.ceil(output.dims[1] / 64),
+			Math.ceil(output.dims[0] / 64),
+		]);
 
 
 		const pinout = new graph.Pinout();
