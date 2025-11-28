@@ -169,6 +169,8 @@ class Message {
 		offset += 4;
 		this.all_tensors = [];
 
+		console.debug(`Message.decode: byte_size = ${buffer.byteLength}`);
+
 		for (let i = 0; i < num_packets; i++) {
 			const channel_len = view.getUint32(offset);
 			offset += 4;
@@ -185,6 +187,8 @@ class Message {
 				dims.push(d);
 				elem_cnt *= d;
 			}
+			console.debug(`Message.decode: ${str}.dims = ${dims}`);
+
 			offset += 4 * dim_cnt;
 			const data = new Float32Array(buffer, offset, elem_cnt);
 			offset += 4 * elem_cnt;
@@ -223,11 +227,14 @@ class Message {
 		const buffers = await Promise.all(promises);
 		view.setUint32(0, this.all_tensors.length);
 
+		console.debug(`Message.encode: byte_size = ${buffer.byteLength}`);
 		for (const t of buffers) {
 			let offset = offsets[t.i];
 			const dims = this.all_tensors[t.i].tensor.dims;
 			const channel = this.all_tensors[t.i].channel;
 			const elem_cnt = this.all_tensors[t.i].tensor.elem_cnt;
+
+			console.debug(`Message.encode: ${channel}.dims = ${dims}`);
 
 			const enc = new TextEncoder().encode(channel);
 			view.setUint32(offset, enc.length);
@@ -354,12 +361,17 @@ export class NetworkNode extends graph.Node {
 		if (this.params_obj) {
 			url = url + "?" + new URLSearchParams(this.params_obj).toString();
 		}
-		await msg.send(url);
+		try {
+			await msg.send(url);
 
-		for (let i = 0; i < msg.get_tensor_count(); i++) {
-			const t = msg.get_nth_tensor(i);
-			const ch = msg.get_nth_channel(i);
-			pinout.set(ch, t);
+			for (let i = 0; i < msg.get_tensor_count(); i++) {
+				const t = msg.get_nth_tensor(i);
+				const ch = msg.get_nth_channel(i);
+				pinout.set(ch, t);
+			}
+		} catch (err) {
+			console.error(err);
+			return null;
 		}
 
 		return pinout;
