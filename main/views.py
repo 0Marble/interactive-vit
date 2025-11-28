@@ -12,9 +12,6 @@ import random
 
 logger = logging.getLogger(__name__)
 
-def hello_world(request):
-    return http.HttpResponse("Hello, world.")
-
 def index(request):
     template = loader.get_template("main/index.html")
     return http.HttpResponse(template.render({}, request))

@@ -136,12 +136,12 @@ class Message {
 	}
 
 	/**
-	 * @param {string} endpoint 
+	 * @param {string} url
 	 */
-	async send(endpoint) {
+	async send(url) {
 		const buf = await this.encode();
 
-		const resp = await fetch(`node/${endpoint}/compute`, {
+		const resp = await fetch(url, {
 			method: "POST",
 			body: buf,
 			headers: {
@@ -260,15 +260,10 @@ function add_padding(offset, align) {
 export class NetworkNode extends graph.Node {
 
 	/**
-	 * @type {Map<string, IODescription>
-	 */
-	static io_cache = new Map();
-
-	/**
 	 * @param {string} endpoint 
 	 * @param {IODescription} io 
 	 */
-	constructor(endpoint, io) {
+	constructor(endpoint, io, params_obj) {
 		super();
 		this.pre_init();
 
@@ -278,6 +273,7 @@ export class NetworkNode extends graph.Node {
 		 * @type {IODescription}
 		 */
 		this.io = io;
+		this.params_obj = params_obj;
 
 		this.post_init();
 	}
@@ -288,7 +284,12 @@ export class NetworkNode extends graph.Node {
 		this.net_div.innerHTML = "<p>Loading...</p>"
 
 		try {
-			const resp = await fetch(`node/${this.endpoint}/contents`, { method: "GET" });
+			let url = `node/${this.endpoint}/contents`;
+			if (this.params_obj) {
+				url = url + "?" + new URLSearchParams(this.params_obj).toString();
+			}
+
+			const resp = await fetch(url, { method: "GET" });
 			if (!resp.ok) throw new Error("response not ok");
 			this.net_div.innerHTML = await resp.text();
 			this.on_visual_update();
@@ -348,7 +349,12 @@ export class NetworkNode extends graph.Node {
 			}
 		}
 
-		await msg.send(this.endpoint);
+
+		let url = `node/${this.endpoint}/compute`;
+		if (this.params_obj) {
+			url = url + "?" + new URLSearchParams(this.params_obj).toString();
+		}
+		await msg.send(url);
 
 		for (let i = 0; i < msg.get_tensor_count(); i++) {
 			const t = msg.get_nth_tensor(i);
@@ -358,27 +364,28 @@ export class NetworkNode extends graph.Node {
 
 		return pinout;
 	}
-
-	static async register_factory(endpoint) {
+	static async register_factory(endpoint, params_obj) {
 		const node_button = document.createElement("button");
 		node_button.textContent = `New Net-${endpoint} Node`;
-		node_button.addEventListener("click", async () => await NetworkNode.create(endpoint));
+		node_button.addEventListener("click", async () => await NetworkNode.create(endpoint, params_obj));
 		graph.Context.register_deserializer("net_node", NetworkNode.deserialize);
 
 		return node_button;
 	}
 
-	static async create(endpoint) {
+	static async create(endpoint, params_obj) {
 		await graph.Context.wait_for_not_in_eval();
 
-		if (!NetworkNode.io_cache.has(endpoint)) {
-			const resp = await fetch(`node/${endpoint}/description`, { method: "GET" });
-			const json = await resp.json();
-			const io = IODescription.parse(json);
-			NetworkNode.io_cache.set(endpoint, io);
+		let url = `node/${endpoint}/description`;
+		if (params_obj) {
+			url = url + "?" + new URLSearchParams(params_obj).toString();
 		}
-		const io = NetworkNode.io_cache.get(endpoint);
-		const node = new NetworkNode(endpoint, io);
+
+		const resp = await fetch(url, { method: "GET" });
+		const json = await resp.json();
+		const io = IODescription.parse(json);
+
+		const node = new NetworkNode(endpoint, io, params_obj);
 		await node.fetch_node();
 		return node;
 	}
@@ -387,10 +394,11 @@ export class NetworkNode extends graph.Node {
 		return {
 			kind: "net_node",
 			endpoint: this.endpoint,
+			params: this.params_obj,
 		};
 	}
 
 	static async deserialize(obj) {
-		return await NetworkNode.create(obj.endpoint);
+		return await NetworkNode.create(obj.endpoint, obj.params);
 	}
 }
