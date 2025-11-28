@@ -83,6 +83,7 @@ export class Conv2dNode extends graph.Node {
 			this.matrix = new Float32Array(this.w * this.h);
 			this.matrix_changed = true;
 			this.draw_matrix_section();
+			this.on_visual_update();
 
 			await graph.Context.do_eval();
 		};

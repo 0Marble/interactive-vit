@@ -310,6 +310,7 @@ export class NetworkNode extends graph.Node {
 			const resp = await fetch(`${this.endpoint}/contents`, { method: "GET" });
 			if (!resp.ok) throw new Error("response not ok");
 			this.net_div.innerHTML = await resp.text();
+			this.on_visual_update();
 		} catch (err) {
 			console.warn("Invalid IO description response:", err);
 			this.init_retry();

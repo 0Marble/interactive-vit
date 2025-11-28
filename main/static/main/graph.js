@@ -357,6 +357,13 @@ export class Node {
 	move_to(x, y) {
 		this.pos = { x, y };
 		this.div.style = `top: ${this.pos.y}px; left: ${this.pos.x}px;`;
+
+		this.on_visual_update();
+	}
+
+	on_visual_update() {
+		for (const e of this.inputs()) e.draw_edge();
+		for (const e of this.outputs()) e.draw_edge();
 	}
 
 	destroy() {

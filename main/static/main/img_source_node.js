@@ -27,6 +27,8 @@ export class ImgSourceNode extends graph.Node {
 
 		this.pre_init();
 
+		this.has_img = false;
+
 		this.img_div = document.createElement("div");
 		const input = document.createElement("input");
 		input.type = "file";
@@ -35,9 +37,13 @@ export class ImgSourceNode extends graph.Node {
 		this.canvas = document.createElement("canvas");
 		this.canvas.className = "image_view_canvas";
 		this.ctx = this.canvas.getContext("2d");
-		this.img_div.appendChild(input);
-		this.img_div.appendChild(this.canvas);
-		this.has_img = false;
+
+		const input_div = document.createElement("div");
+		const canvas_div = document.createElement("div");
+		input_div.appendChild(input);
+		canvas_div.appendChild(this.canvas);
+		this.img_div.appendChild(input_div);
+		this.img_div.appendChild(canvas_div);
 
 		input.addEventListener("change", () => {
 			const file = input.files[0];
@@ -51,6 +57,7 @@ export class ImgSourceNode extends graph.Node {
 				this.canvas.height = img.height;
 				this.ctx.drawImage(img, 0, 0, img.width, img.height);
 				this.has_img = true;
+				this.on_visual_update();
 
 				graph.Context.schedule_eval(this);
 

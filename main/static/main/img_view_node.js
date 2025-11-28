@@ -56,7 +56,9 @@ export class ImgViewNode extends graph.Node {
 	 * @override 
 	 */
 	async eval() {
+		this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 		let size = undefined;
+
 		for (const edge of this.inputs()) {
 			/**
 			 * @type {gpu.Tensor | null}
@@ -85,12 +87,12 @@ export class ImgViewNode extends graph.Node {
 		this.canvas.width = size.w;
 		this.canvas.height = size.h;
 
-		const buf = new gpu.Tensor([size.h, size.w], 4);
+		const output = new gpu.Tensor([size.h, size.w], 4);
 		for (const edge of this.inputs()) {
 			/**
 			 * @type {gpu.Tensor | null}
 			 */
-			const packet = await edge.read_packet();
+			const input = await edge.read_packet();
 
 			let cfg = null;
 			switch (edge.out_port.channel) {
@@ -102,19 +104,20 @@ export class ImgViewNode extends graph.Node {
 			this.merge.set_uniform("cfg", cfg.buffer);
 			this.merge.run(
 				[
-					{ binding: 0, tensor: buf },
-					{ binding: 1, tensor: packet },
+					{ binding: 0, tensor: output },
+					{ binding: 1, tensor: input },
 				],
-				Math.ceil(buf.elem_cnt / 64),
+				Math.ceil(output.elem_cnt / 64),
 			);
-
-			const rgba = new Uint8Array(await buf.to_cpu());
-			const img = this.ctx.createImageData(size.w, size.h);
-			for (let i = 0; i < size.w * size.h * 4; i++) {
-				img.data[i] = rgba[i];
-			}
-			this.ctx.putImageData(img, 0, 0);
 		}
+
+		const rgba = new Uint8Array(await output.to_cpu());
+		const img = this.ctx.createImageData(size.w, size.h);
+		for (let i = 0; i < size.w * size.h * 4; i++) {
+			img.data[i] = rgba[i];
+		}
+		this.ctx.putImageData(img, 0, 0);
+		this.on_visual_update();
 
 		return null;
 	}
