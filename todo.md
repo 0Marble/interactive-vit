@@ -1,6 +1,5 @@
 # Critical
 
-- keep track of sizes on the client
 - ability to save/share graphs
     1. A (super-) user designs a graph locally, then it is possible to save and run it on the server.
         - How can we design a very expensive graph locally?
@@ -12,9 +11,13 @@
 
 # Non-critical
 
+- keep track of sizes on the client
 - server-side graph: whole sections of the computation graph can be evaluated on the server, without data going back and forth
 
 # Log
+
+- 28.11.2025:
+    1. Save/Share graphs part 1: save/load on the client
 
 - 27.11.2025:
     1. Experimented with different node APIs. 
