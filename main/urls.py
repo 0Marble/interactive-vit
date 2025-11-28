@@ -12,6 +12,8 @@ logger = logging.getLogger(__name__)
 
 urlpatterns = [
     path("", views.index, name="index"),
+    path("list_models", views.list_models, name="list-models"),
+    path("load_model", views.load_model, name="load-model"),
 ] 
 
 nodes_dir = os.path.join(settings.BASE_DIR, "main/nodes")
