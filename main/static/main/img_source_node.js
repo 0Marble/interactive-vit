@@ -106,22 +106,31 @@ export class ImgSourceNode extends graph.Node {
 		return ["R", "G", "B"];
 	}
 
-	serialize() {
-		throw new Error(`${this}.serialize(): unimplemented`);
-	}
-
 	draw_content() {
 		this.content_div.appendChild(this.img_div);
 	}
 
 	static async register_factory() {
-		const toolbar = document.getElementById("toolbar");
 
 		const node_button = document.createElement("button");
 		node_button.textContent = "New ImgSrc Node";
 		node_button.addEventListener("click", () => {
-			const node = new ImgSourceNode();
+			new ImgSourceNode();
 		});
-		toolbar.appendChild(node_button);
+
+		graph.Context.register_deserializer("img_src", ImgSourceNode.deserialize);
+
+		return node_button;
+	}
+
+	serialize() {
+		return {
+			kind: "img_src",
+		};
+	}
+
+	static async deserialize(_obj) {
+		const node = new ImgSourceNode();
+		return node;
 	}
 }

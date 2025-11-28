@@ -208,14 +208,53 @@ export class Conv2dNode extends graph.Node {
 	}
 
 	static async register_factory() {
-		const toolbar = document.getElementById("toolbar");
-
 		const node_button = document.createElement("button");
 		node_button.textContent = "New Conv2d Node";
 		node_button.addEventListener("click", () => {
 			new Conv2dNode(3, 3);
 		});
-		toolbar.appendChild(node_button);
+
+		graph.Context.register_deserializer("conv2d", Conv2dNode.deserialize);
+
+		return node_button;
+	}
+
+	serialize() {
+		return {
+			kind: "conv2d",
+			dim: [this.h, this.w],
+			data: base64_encode(this.matrix.buffer),
+		};
+	}
+
+	static async deserialize(obj) {
+		const [h, w] = obj.dim;
+		const matrix = new Float32Array(base64_decode(obj.data));
+		const node = new Conv2dNode(w, h, matrix);
+		return node;
+	}
+}
+
+/**
+ * @param {ArrayBuffer} data 
+ */
+function base64_encode(data) {
+	const bytes = new Uint8Array(data);
+	if (bytes.toBase64) {
+		return bytes.toBase64();
+	} else {
+		throw new Error("browser doesnt support Uint8Array.toBase64()");
+	}
+}
+
+/**
+ * @param {string} str 
+ */
+function base64_decode(base64) {
+	if (Uint8Array.fromBase64) {
+		return Uint8Array.fromBase64(base64).buffer;
+	} else {
+		throw new Error("browser doesnt support Uint8Array.fromBase64()");
 	}
 }
 

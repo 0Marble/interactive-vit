@@ -462,6 +462,14 @@ export class Node {
 		return `Node(${this.index})`;
 	}
 
+	serialize_internal() {
+		const instance = this.serialize();
+		return {
+			instance,
+			pos: this.pos,
+		};
+	}
+
 	/**
 	 * @param {Node} start 
 	 * @param {(node:Node)=>boolean} visitor 
@@ -591,6 +599,73 @@ export class Context {
 		}
 
 		Context.nodes_to_eval.clear();
+	}
+
+	static deserializers = new Map();
+
+	static register_deserializer(kind, fptr) {
+		Context.deserializers.set(kind, fptr);
+	}
+
+	static serialize() {
+		Context.ensure_not_eval();
+
+		/**
+		 * @type {Map<Node,number>}
+		 */
+		const index_map = new Map();
+		const obj = {
+			nodes: [],
+			edges: [],
+		};
+
+		for (const node of Context.all_nodes) {
+			const data = node.serialize_internal();
+			index_map.set(node, obj.nodes.length);
+			obj.nodes.push(data);
+		}
+		for (const edge of Context.all_edges) {
+			const data = {
+				in_port: {
+					node: index_map.get(edge.in_port.node),
+					channel: edge.in_port.channel,
+				},
+				out_port: {
+					node: index_map.get(edge.out_port.node),
+					channel: edge.out_port.channel,
+				},
+			};
+			obj.edges.push(data);
+		}
+
+		return obj;
+	}
+
+	static async deserialize(obj) {
+		/**
+		 * @type{Node[]}
+		 */
+		const nodes = [];
+		obj.nodes.forEach(() => nodes.push(null));
+		/**
+		 * @type{Promise<void>[]}
+		 */
+		const promises = obj.nodes.map((data, i) => {
+			const { pos, instance } = data;
+			return Context.deserializers.get(instance.kind)(instance)
+				.then(node => {
+					node.move_to(pos.x, pos.y);
+					nodes[i] = node;
+				});
+		});
+
+		await Promise.all(promises);
+
+		for (const { in_port, out_port } of obj.edges) {
+			const a = new Port(nodes[in_port.node], "out", in_port.channel);
+			const b = new Port(nodes[out_port.node], "in", out_port.channel);
+			Edge.connect(a, b);
+		}
 	}
 }
 

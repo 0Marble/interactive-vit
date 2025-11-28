@@ -135,13 +135,24 @@ export class ImgViewNode extends graph.Node {
 	}
 
 	static async register_factory() {
-		const toolbar = document.getElementById("toolbar");
-
 		const node_button = document.createElement("button");
 		node_button.textContent = "New ImgView Node";
 		node_button.addEventListener("click", () => {
 			new ImgViewNode();
 		});
-		toolbar.appendChild(node_button);
+
+		graph.Context.register_deserializer("img_view", ImgViewNode.deserialize);
+
+		return node_button;
+	}
+
+	serialize() {
+		return {
+			kind: "img_view",
+		};
+	}
+
+	static async deserialize(_obj) {
+		return new ImgViewNode();
 	}
 }

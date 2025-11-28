@@ -267,15 +267,14 @@ export class NetworkNode extends graph.Node {
 		}
 		const io = NetworkNode.io_cache.get(endpoint);
 
-		const toolbar = document.getElementById("toolbar");
-
 		const node_button = document.createElement("button");
 		node_button.textContent = `New Net-${endpoint} Node`;
 		node_button.addEventListener("click", async () => {
 			const node = new NetworkNode(endpoint, io);
 			await node.fetch_node();
 		});
-		toolbar.appendChild(node_button);
+
+		return node_button;
 	}
 
 	/**
@@ -379,17 +378,10 @@ export class NetworkNode extends graph.Node {
 	}
 
 	serialize() {
-		const edges = [];
-		for (const e of this.outputs()) {
-			edges.push({ channel: e.out_port.channel, node: e.out_port.node.index });
-		}
-
 		return {
 			kind: "net_node",
-			index: this.index,
 			endpoint: this.endpoint,
 			pos: this.pos,
-			edges,
 		};
 	}
 }
