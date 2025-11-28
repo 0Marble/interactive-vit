@@ -1,5 +1,5 @@
-import * as graph from "./graph.js";
-import * as gpu from "./gpu.js";
+import * as graph from "../graph.js";
+import * as gpu from "../gpu.js";
 
 const conv2d_src = `
 @group(0) @binding(0)
@@ -210,13 +210,16 @@ export class Conv2dNode extends graph.Node {
 	static async register_factory() {
 		const node_button = document.createElement("button");
 		node_button.textContent = "New Conv2d Node";
-		node_button.addEventListener("click", () => {
-			new Conv2dNode(3, 3);
-		});
+		node_button.addEventListener("click", async () => { await Conv2dNode.create(3, 3) });
 
 		graph.Context.register_deserializer("conv2d", Conv2dNode.deserialize);
 
 		return node_button;
+	}
+
+	static async create(w, h, matrix) {
+		await graph.Context.wait_for_not_in_eval();
+		return new Conv2dNode(w, h, matrix);
 	}
 
 	serialize() {
@@ -230,7 +233,7 @@ export class Conv2dNode extends graph.Node {
 	static async deserialize(obj) {
 		const [h, w] = obj.dim;
 		const matrix = new Float32Array(base64_decode(obj.data));
-		const node = new Conv2dNode(w, h, matrix);
+		const node = await Conv2dNode.create(w, h, matrix);
 		return node;
 	}
 }

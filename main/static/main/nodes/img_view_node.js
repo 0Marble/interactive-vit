@@ -1,5 +1,5 @@
-import * as gpu from "./gpu.js";
-import * as graph from "./graph.js";
+import * as gpu from "../gpu.js";
+import * as graph from "../graph.js";
 
 const clear_kernel_src = `
 @group(0) @binding(0)
@@ -137,13 +137,16 @@ export class ImgViewNode extends graph.Node {
 	static async register_factory() {
 		const node_button = document.createElement("button");
 		node_button.textContent = "New ImgView Node";
-		node_button.addEventListener("click", () => {
-			new ImgViewNode();
-		});
+		node_button.addEventListener("click", async () => { await ImgViewNode.create() });
 
 		graph.Context.register_deserializer("img_view", ImgViewNode.deserialize);
 
 		return node_button;
+	}
+
+	static async create() {
+		await graph.Context.wait_for_not_in_eval();
+		return new ImgViewNode();
 	}
 
 	serialize() {
@@ -153,6 +156,6 @@ export class ImgViewNode extends graph.Node {
 	}
 
 	static async deserialize(_obj) {
-		return new ImgViewNode();
+		return await ImgViewNode.create();
 	}
 }

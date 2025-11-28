@@ -1,5 +1,5 @@
-import * as graph from "./graph.js";
-import * as gpu from "./gpu.js";
+import * as graph from "../graph.js";
+import * as gpu from "../gpu.js";
 
 const split_kernel_src = `
 @group(0) @binding(0)
@@ -114,13 +114,17 @@ export class ImgSourceNode extends graph.Node {
 
 		const node_button = document.createElement("button");
 		node_button.textContent = "New ImgSrc Node";
-		node_button.addEventListener("click", () => {
-			new ImgSourceNode();
-		});
+		node_button.addEventListener("click", async () => { await ImgSourceNode.create(); });
 
 		graph.Context.register_deserializer("img_src", ImgSourceNode.deserialize);
 
 		return node_button;
+	}
+
+	static async create() {
+		await graph.Context.wait_for_not_in_eval();
+		const node = new ImgSourceNode();
+		return node;
 	}
 
 	serialize() {
@@ -130,7 +134,6 @@ export class ImgSourceNode extends graph.Node {
 	}
 
 	static async deserialize(_obj) {
-		const node = new ImgSourceNode();
-		return node;
+		return await ImgSourceNode.create();
 	}
 }

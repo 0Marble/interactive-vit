@@ -1,7 +1,7 @@
 
-import * as graph from "./graph.js";
-import * as gpu from "./gpu.js";
-import * as csrf from "./csrf.js";
+import * as graph from "../graph.js";
+import * as gpu from "../gpu.js";
+import * as csrf from "../csrf.js";
 
 /*
  * This node will do opaque calculations on the server
@@ -258,24 +258,6 @@ function add_padding(offset, align) {
 }
 
 export class NetworkNode extends graph.Node {
-	static async register_factory(endpoint) {
-		if (!NetworkNode.io_cache.has(endpoint)) {
-			const resp = await fetch(`${endpoint}/description`, { method: "GET" });
-			const json = await resp.json();
-			const io = IODescription.parse(json);
-			NetworkNode.io_cache.set(endpoint, io);
-		}
-		const io = NetworkNode.io_cache.get(endpoint);
-
-		const node_button = document.createElement("button");
-		node_button.textContent = `New Net-${endpoint} Node`;
-		node_button.addEventListener("click", async () => {
-			const node = new NetworkNode(endpoint, io);
-			await node.fetch_node();
-		});
-
-		return node_button;
-	}
 
 	/**
 	 * @type {Map<string, IODescription>
@@ -377,11 +359,38 @@ export class NetworkNode extends graph.Node {
 		return pinout;
 	}
 
+	static async register_factory(endpoint) {
+		const node_button = document.createElement("button");
+		node_button.textContent = `New Net-${endpoint} Node`;
+		node_button.addEventListener("click", async () => await NetworkNode.create(endpoint));
+		graph.Context.register_deserializer("net_node", NetworkNode.deserialize);
+
+		return node_button;
+	}
+
+	static async create(endpoint) {
+		await graph.Context.wait_for_not_in_eval();
+
+		if (!NetworkNode.io_cache.has(endpoint)) {
+			const resp = await fetch(`${endpoint}/description`, { method: "GET" });
+			const json = await resp.json();
+			const io = IODescription.parse(json);
+			NetworkNode.io_cache.set(endpoint, io);
+		}
+		const io = NetworkNode.io_cache.get(endpoint);
+		const node = new NetworkNode(endpoint, io);
+		await node.fetch_node();
+		return node;
+	}
+
 	serialize() {
 		return {
 			kind: "net_node",
 			endpoint: this.endpoint,
-			pos: this.pos,
 		};
+	}
+
+	static async deserialize(obj) {
+		return await NetworkNode.create(obj.endpoint);
 	}
 }
