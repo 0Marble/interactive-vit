@@ -1,36 +1,33 @@
 import * as gpu from "../gpu.js";
 import * as graph from "../graph.js";
 
-const clear_kernel_src = `
-@group(0) @binding(0)
-var<storage, read_write> image: array<u32>;
-override WRK_SIZE = 64;
-@compute @workgroup_size(WRK_SIZE)
-fn main(@builtin(global_invocation_id) id: vec3u) {
-	image[id.x] = 0xFF000000;
-}`;
-
+const WRK_SIZE = 16;
 const merge_kernel_src = `
-@group(0) @binding(0)
-var<storage, read_write> image: array<u32>;
-@group(0) @binding(1)
-var<storage, read> data: array<f32>;
+${gpu.shader_tesnor_def(0, 0, "read_write", "image", "u32", 2)}
+${gpu.shader_tesnor_def(1, 0, "read", "data", "f32", 2)}
 
 struct Config {
 	bit_offset: u32,
 	bit_mask: u32,
 	padding: vec2u,
 }
-@group(0) @binding(2)
+@group(2) @binding(0)
 var<uniform> cfg: Config;
 
-override WRK_SIZE = 64;
-@compute @workgroup_size(WRK_SIZE)
+override WRK_SIZE = ${WRK_SIZE};
+@compute @workgroup_size(WRK_SIZE, WRK_SIZE)
 fn main(@builtin(global_invocation_id) id: vec3u) {
-	var prev = f32((image[id.x] & cfg.bit_mask) >> cfg.bit_offset) / 255.0;
-	var color = u32(clamp(prev + data[id.x], 0.0, 1.0) * 255.0);
-	image[id.x] &= ~cfg.bit_mask;
-	image[id.x] |= 0xFF000000 | (color << cfg.bit_offset);
+	if (id.x >= image_cfg.size[1].x || id.y >= image_cfg.size[0].x) {
+		return;
+	}
+
+	var idx_1 = id.x * image_cfg.offset[1].x + id.y * image_cfg.offset[0].x;
+	var idx_2 = id.x * data_cfg.offset[1].x + id.y * data_cfg.offset[0].x;
+
+	var prev = f32((image[idx_1] & cfg.bit_mask) >> cfg.bit_offset) / 255.0;
+	var color = u32(clamp(prev + data[idx_2], 0.0, 1.0) * 255.0);
+	image[idx_1] &= ~cfg.bit_mask;
+	image[idx_1] |= 0xFF000000 | (color << cfg.bit_offset);
 }
 `;
 
@@ -46,8 +43,7 @@ export class ImgViewNode extends graph.Node {
 		this.ctx = this.canvas.getContext("2d");
 		this.img_div.appendChild(this.canvas);
 
-		this.merge = new gpu.Kernel(merge_kernel_src, [new gpu.UniformInfo("cfg", 4 * 4, 2)]);
-		this.clear = new gpu.Kernel(clear_kernel_src);
+		this.merge = new gpu.Kernel(merge_kernel_src, [new gpu.UniformBinding("cfg", 2, 0, 4 * 4)]);
 
 		this.post_init();
 	}
@@ -88,6 +84,7 @@ export class ImgViewNode extends graph.Node {
 		this.canvas.height = size.h;
 
 		const output = new gpu.Tensor([size.h, size.w], 4);
+		this.merge.set_tensor(0, 0, output);
 		for (const edge of this.inputs()) {
 			/**
 			 * @type {gpu.Tensor | null}
@@ -101,17 +98,17 @@ export class ImgViewNode extends graph.Node {
 				case "B": cfg = new Uint32Array([16, 0x00FF0000, 0, 0]); break;
 			}
 
+			this.merge.set_tensor(1, 0, input);
 			this.merge.set_uniform("cfg", cfg.buffer);
-			this.merge.run(
-				[
-					{ binding: 0, tensor: output },
-					{ binding: 1, tensor: input },
-				],
-				Math.ceil(output.elem_cnt / 64),
-			);
+
+			this.merge.run([
+				Math.ceil(size.w / WRK_SIZE),
+				Math.ceil(size.h / WRK_SIZE),
+			]);
 		}
 
 		const rgba = new Uint8Array(await output.to_cpu());
+
 		const img = this.ctx.createImageData(size.w, size.h);
 		for (let i = 0; i < size.w * size.h * 4; i++) {
 			img.data[i] = rgba[i];

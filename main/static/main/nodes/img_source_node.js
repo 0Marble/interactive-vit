@@ -1,22 +1,29 @@
 import * as graph from "../graph.js";
 import * as gpu from "../gpu.js";
 
+const WRK_SIZE = 16;
 const split_kernel_src = `
-@group(0) @binding(0)
-var<storage, read> image: array<u32>;
-@group(0) @binding(1)
-var<storage, read_write> r_channel: array<f32>;
-@group(0) @binding(2)
-var<storage, read_write> g_channel: array<f32>;
-@group(0) @binding(3)
-var<storage, read_write> b_channel: array<f32>;
 
-override WRK_SIZE = 64;
-@compute @workgroup_size(WRK_SIZE)
+${gpu.shader_tesnor_def(0, 0, "read", "image", "u32", 2)}
+${gpu.shader_tesnor_def(1, 0, "read_write", "r_channel", "f32", 2)}
+${gpu.shader_tesnor_def(2, 0, "read_write", "g_channel", "f32", 2)}
+${gpu.shader_tesnor_def(3, 0, "read_write", "b_channel", "f32", 2)}
+
+override WRK_SIZE = ${WRK_SIZE};
+@compute @workgroup_size(WRK_SIZE, WRK_SIZE)
 fn main(@builtin(global_invocation_id) id: vec3u) {
-	r_channel[id.x] = f32((image[id.x] & 0x000000FF) >> 0) / 255;
-	g_channel[id.x] = f32((image[id.x] & 0x0000FF00) >> 8) / 255;
-	b_channel[id.x] = f32((image[id.x] & 0x00FF0000) >> 16) / 255;
+	if (id.x >= image_cfg.size[1].x || id.y >= image_cfg.size[0].x) {
+		return;
+	}
+
+	var idx = id.x * image_cfg.offset[1].x + id.y * image_cfg.offset[0].x;
+	var r = f32((image[idx] & 0x000000FF) >> 0) / 255;
+	var g = f32((image[idx] & 0x0000FF00) >> 8) / 255;
+	var b = f32((image[idx] & 0x00FF0000) >> 16) / 255;
+
+	r_channel[id.x * r_channel_cfg.offset[1].x + id.y * r_channel_cfg.offset[0].x] = r;
+	g_channel[id.x * g_channel_cfg.offset[1].x + id.y * g_channel_cfg.offset[0].x] = g;
+	b_channel[id.x * b_channel_cfg.offset[1].x + id.y * b_channel_cfg.offset[0].x] = b;
 }
 `;
 
@@ -85,10 +92,12 @@ export class ImgSourceNode extends graph.Node {
 			new gpu.Tensor([this.canvas.height, this.canvas.width], 4),
 			new gpu.Tensor([this.canvas.height, this.canvas.width], 4),
 		];
-		this.kernel.run(
-			bufs.map((tensor, binding) => { return { binding, tensor }; }),
-			Math.ceil(this.canvas.width * this.canvas.height / 64),
-		);
+		bufs.forEach((tensor, group) => this.kernel.set_tensor(group, 0, tensor));
+
+		this.kernel.run([
+			Math.ceil(this.canvas.width / WRK_SIZE),
+			Math.ceil(this.canvas.height / WRK_SIZE),
+		]);
 
 		const pinout = new graph.Pinout();
 		pinout.set("R", bufs[1]);

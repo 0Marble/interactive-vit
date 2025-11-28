@@ -1,28 +1,31 @@
 import * as graph from "../graph.js";
 import * as gpu from "../gpu.js";
 
+const WRK_SIZE = 16;
 const conv2d_src = `
 ${gpu.shader_tesnor_def(0, 0, "read", "input", "f32", 2)}
 ${gpu.shader_tesnor_def(1, 0, "read", "weight", "f32", 2)}
 ${gpu.shader_tesnor_def(2, 0, "read_write", "output", "f32", 2)}
 
-override WRK_SIZE = 64;
+override WRK_SIZE = ${WRK_SIZE};
 @compute @workgroup_size(WRK_SIZE, WRK_SIZE)
 fn main(@builtin(global_invocation_id) id: vec3u) {
 	var x = id.x;
 	var y = id.y;
-	if (x >= output_size[1] || y >= output_size[0]) return;
+	if (x >= output_cfg.size[1].x || y >= output_cfg.size[0].x) {
+		return;
+	}
 	
 	var sum: f32 = 0.0;
-	for (var j: u32 = 0; j < weight_size[1]; j++) {
-		for (var i: u32 = 0; i < weight_size[0]; i++) {
-			var a = input[(y + j) * input_offset[1] + (x + i) * input_offset[0]];
-			var b = weight[j * weight_offset[1] + i * weight_offset[0]];
+	for (var j: u32 = 0; j < weight_cfg.size[0].x; j++) {
+		for (var i: u32 = 0; i < weight_cfg.size[1].x; i++) {
+			var a = input[(y + j) * input_cfg.offset[0].x + (x + i) * input_cfg.offset[1].x];
+			var b = weight[j * weight_cfg.offset[0].x + i * weight_cfg.offset[1].x];
 			sum += a * b;
 		}
 	}
 
-	output[id.x] = sum;
+	output[id.x * output_cfg.offset[1].x + id.y * output_cfg.offset[0].x] = sum;
 }
 `;
 
@@ -46,6 +49,7 @@ export class Conv2dNode extends graph.Node {
 		this.matrix_tensor = new gpu.Tensor([this.h, this.w], 4, new Uint8Array(this.matrix.buffer));
 		this.matrix_changed = false;
 		this.kernel.set_tensor(1, 0, this.matrix_tensor);
+		this.matrix_tensor.to_cpu().then(buf => console.log("conv2d_matrix:", buf));
 
 		this.matrix_div = document.createElement("div");
 
@@ -180,16 +184,16 @@ export class Conv2dNode extends graph.Node {
 			this.matrix_changed = false;
 			this.matrix_tensor = new gpu.Tensor([this.h, this.w], 4, new Uint8Array(this.matrix.buffer));
 			this.kernel.set_tensor(1, 0, this.matrix_tensor);
+			console.log("conv2d_matrix:", await this.matrix_tensor.to_cpu());
 		}
 
 		this.kernel.set_tensor(0, 0, input);
 		this.kernel.set_tensor(2, 0, output);
 
 		this.kernel.run([
-			Math.ceil(output.dims[1] / 64),
-			Math.ceil(output.dims[0] / 64),
+			Math.ceil(output.dims[1] / WRK_SIZE),
+			Math.ceil(output.dims[0] / WRK_SIZE),
 		]);
-
 
 		const pinout = new graph.Pinout();
 		pinout.set("o", output);

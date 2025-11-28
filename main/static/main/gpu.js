@@ -112,8 +112,7 @@ export class Kernel {
 	 */
 	set_tensor(group, binding_offset, tensor) {
 		this.set_binding(group, binding_offset + 0, tensor.data_buffer);
-		this.set_binding(group, binding_offset + 1, tensor.size_buffer);
-		this.set_binding(group, binding_offset + 2, tensor.offsets_buffer);
+		this.set_binding(group, binding_offset + 1, tensor.cfg_buffer);
 	}
 
 	/**
@@ -171,13 +170,9 @@ export class Tensor {
 			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
 			mappedAtCreation: (value ? true : false),
 		});
-		this.size_buffer = Runtime.device.createBuffer({
-			size: this.dims.length * 4,
-			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-			mappedAtCreation: true,
-		});
-		this.offsets_buffer = Runtime.device.createBuffer({
-			size: this.offsets.length * 4,
+
+		this.cfg_buffer = Runtime.device.createBuffer({
+			size: (this.dims.length + this.offsets.length) * 16,
 			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
 			mappedAtCreation: true,
 		});
@@ -187,25 +182,15 @@ export class Tensor {
 			this.data_buffer.unmap();
 		}
 
-		new Uint8Array(this.size_buffer.getMappedRange()).set(this.dims);
-		this.size_buffer.unmap();
-		new Uint8Array(this.offsets_buffer.getMappedRange()).set(this.offsets);
-		this.offsets_buffer.unmap();
-	}
+		const cfg = new Uint32Array(this.cfg_buffer.getMappedRange());
+		for (let i = 0; i < this.dims.length; i++) {
+			const d = this.dims[i];
+			const o = this.offsets[i];
+			cfg[4 * i + 0] = d;
+			cfg[4 * i + 4 * this.dims.length] = o;
+		}
 
-	/**
-	 *
-	 * @param {number[]} dims 
-	 * @param {ArrayBuffer | undefined} value 
-	 */
-	resize(dims, value) {
-		const new_tensor = new Tensor(dims, this.elem_size, value)
-
-		this.dims = new_tensor.dims;
-		this.elem_size = new_tensor.elem_size;
-		this.byte_size = new_tensor.byte_size;
-		this.elem_cnt = new_tensor.elem_cnt;
-		this.data_buffer = new_tensor.data_buffer;
+		this.cfg_buffer.unmap();
 	}
 
 	/**
@@ -285,9 +270,12 @@ export function shader_tesnor_def(group, binding_offset, access, name, type, dim
 	return `
 @group(${group}) @binding(${binding_offset})
 var<storage, ${access}> ${name}: array<${type}>;
-@group(${group}) @binding(${binding_offset + 1})
-var<uniform> ${name}_size: array<${dim}, u32>;
-@group(${group}) @binding(${binding_offset + 2})
-var<uniform> ${name}_offset: array<${dim}, u32>;
+
+struct ${name}_config_t {
+	size: array<vec4u, ${dim}>,
+	offset: array<vec4u, ${dim}>,
+}
+@group(${group}) @binding(${binding_offset + 1}) 
+var<uniform> ${name}_cfg: ${name}_config_t;
 `;
 }
