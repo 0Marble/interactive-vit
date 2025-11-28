@@ -88,7 +88,6 @@ class IODescription {
 	}
 
 	static parse(raw_obj) {
-		console.debug("parsing description...");
 		if (typeof raw_obj !== "object") throw new TypeError("IODescription should be an IOPort[]");
 		const ports = [];
 		for (const raw_port of raw_obj) ports.push(IOPort.parse(raw_port));
@@ -309,6 +308,7 @@ export class NetworkNode extends graph.Node {
 
 		try {
 			const resp = await fetch(`${this.endpoint}/contents`, { method: "GET" });
+			if (!resp.ok) throw new Error("response not ok");
 			this.net_div.innerHTML = await resp.text();
 		} catch (err) {
 			console.warn("Invalid IO description response:", err);
@@ -375,5 +375,20 @@ export class NetworkNode extends graph.Node {
 		}
 
 		return pinout;
+	}
+
+	serialize() {
+		const edges = [];
+		for (const e of this.outputs()) {
+			edges.push({ channel: e.out_port.channel, node: e.out_port.node.index });
+		}
+
+		return {
+			kind: "net_node",
+			index: this.index,
+			endpoint: this.endpoint,
+			pos: this.pos,
+			edges,
+		};
 	}
 }

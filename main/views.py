@@ -8,6 +8,8 @@ import logging
 
 from . import message 
 
+import random
+
 logger = logging.getLogger(__name__)
 
 def hello_world(request):

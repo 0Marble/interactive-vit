@@ -1,4 +1,4 @@
-import { AsyncLock, CallbackPromise } from "./promise.js";
+import { CallbackPromise } from "./promise.js";
 
 const graph_div = document.getElementById("graph_div");
 
@@ -59,6 +59,9 @@ export class Edge {
 		this.in_port.node.outs.get(this.in_port.channel).delete(this);
 		this.out_port.node.ins.get(this.out_port.channel).delete(this);
 
+		if (this.hitbox_line) this.hitbox_line.remove();
+		if (this.edge_line) this.edge_line.remove();
+
 		Context.schedule_eval(this.out_port.node);
 		Context.all_edges.delete(this);
 	}
@@ -76,6 +79,67 @@ export class Edge {
 
 		in_port.node.outs.get(in_port.channel).add(this);
 		out_port.node.ins.get(out_port.channel).add(this);
+
+		this.edge_line = null;
+		this.hitbox_line = null;
+
+		this.draw_edge();
+	}
+
+	draw_edge() {
+		if (this.edge_line) this.edge_line.remove();
+		if (this.hitbox_line) this.hitbox_line.remove();
+
+		const edges_svg = document.getElementById("edges_svg");
+		const edges_rect = edges_svg.getBoundingClientRect();
+		const in_rect = this.in_port.button().getBoundingClientRect();
+		const out_rect = this.out_port.button().getBoundingClientRect();
+
+		const x1 = in_rect.left + in_rect.width / 2 - edges_rect.left;
+		const y1 = in_rect.top + in_rect.height / 2 - edges_rect.top;
+		const x2 = out_rect.left + out_rect.width / 2 - edges_rect.left;
+		const y2 = out_rect.top + out_rect.height / 2 - edges_rect.top;
+
+
+		this.edge_line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+		this.edge_line.setAttribute("x1", x1);
+		this.edge_line.setAttribute("y1", y1);
+		this.edge_line.setAttribute("x2", x2);
+		this.edge_line.setAttribute("y2", y2);
+		this.edge_line.setAttribute("stroke", "black");
+		this.edge_line.setAttribute("stroke-width", 2);
+
+		this.hitbox_line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+		this.hitbox_line.setAttribute("x1", x1);
+		this.hitbox_line.setAttribute("y1", y1);
+		this.hitbox_line.setAttribute("x2", x2);
+		this.hitbox_line.setAttribute("y2", y2);
+		this.hitbox_line.setAttribute("stroke", "red");
+		this.hitbox_line.setAttribute("stroke-width", 5);
+		this.hitbox_line.setAttribute("stroke-opacity", "0%");
+
+		let is_mouseover = false;
+		this.hitbox_line.addEventListener("mouseenter", () => {
+			is_mouseover = true;
+			this.hitbox_line.setAttribute("stroke-opacity", "100%");
+		});
+		this.hitbox_line.addEventListener("mouseleave", () => {
+			is_mouseover = false;
+			this.hitbox_line.setAttribute("stroke-opacity", "0%");
+		});
+		this.hitbox_line.addEventListener("click", async () => {
+			if (is_mouseover) {
+				await Context.wait_for_not_in_eval();
+
+				this.disconnect();
+
+				await Context.do_eval();
+				is_mouseover = false;
+			}
+		});
+
+		edges_svg.appendChild(this.edge_line);
+		edges_svg.appendChild(this.hitbox_line);
 	}
 
 	toString() {
