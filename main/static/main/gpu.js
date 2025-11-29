@@ -150,7 +150,8 @@ export class Tensor {
 	 */
 	constructor(dims, elem_size, value) {
 		this.dims = dims;
-		this.offsets = [];
+		this.strides = [];
+		this.offset = 0;
 
 		this.elem_size = elem_size;
 		this.byte_size = elem_size;
@@ -158,11 +159,11 @@ export class Tensor {
 		for (const m of dims) {
 			this.byte_size *= m;
 			this.elem_cnt *= m;
-			this.offsets.push(1);
+			this.strides.push(1);
 		}
 		for (let i = 1; i < this.dims.length; i++) {
 			const j = this.dims.length - i - 1;
-			this.offsets[j] = this.offsets[j + 1] * this.dims[j + 1];
+			this.strides[j] = this.strides[j + 1] * this.dims[j + 1];
 		}
 
 		this.data_buffer = Runtime.device.createBuffer({
@@ -172,7 +173,7 @@ export class Tensor {
 		});
 
 		this.cfg_buffer = Runtime.device.createBuffer({
-			size: (this.dims.length + this.offsets.length) * 16,
+			size: this.dims.length * 16 * 2 + 16,
 			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
 			mappedAtCreation: true,
 		});
@@ -185,10 +186,11 @@ export class Tensor {
 		const cfg = new Uint32Array(this.cfg_buffer.getMappedRange());
 		for (let i = 0; i < this.dims.length; i++) {
 			const d = this.dims[i];
-			const o = this.offsets[i];
+			const o = this.strides[i];
 			cfg[4 * i + 0] = d;
 			cfg[4 * i + 4 * this.dims.length] = o;
 		}
+		cfg[4 * 4 * 2 * this.dims.length] = this.offset;
 
 		this.cfg_buffer.unmap();
 	}
@@ -273,9 +275,30 @@ var<storage, ${access}> ${name}: array<${type}>;
 
 struct ${name}_config_t {
 	size: array<vec4u, ${dim}>,
-	offset: array<vec4u, ${dim}>,
+	stride: array<vec4u, ${dim}>,
+	offset: u32,
+	padding0: u32,
+	padding1: u32,
+	padding2: u32,
 }
 @group(${group}) @binding(${binding_offset + 1}) 
 var<uniform> ${name}_cfg: ${name}_config_t;
+
+fn ${name}_idx(idx: array<u32, ${dim}>) -> u32 {
+	var res = ${name}_cfg.offset;
+	for (var i = 0; i < ${dim}; i++) {
+		res += idx[i] * ${name}_cfg.stride[i].x;
+	}
+	return res;
+}
+
+fn ${name}_in_bounds(idx: array<u32, ${dim}>) -> bool {
+	for (var i = 0; i < ${dim}; i++) {
+		if (idx[i] >= ${name}_cfg.size[i].x) {
+			return false;
+		}
+	}
+	return true;
+}
 `;
 }

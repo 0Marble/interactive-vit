@@ -17,12 +17,12 @@ var<uniform> cfg: Config;
 override WRK_SIZE = ${WRK_SIZE};
 @compute @workgroup_size(WRK_SIZE, WRK_SIZE)
 fn main(@builtin(global_invocation_id) id: vec3u) {
-	if (id.x >= image_cfg.size[1].x || id.y >= image_cfg.size[0].x) {
+	if (!image_in_bounds(array(id.y, id.x))){
 		return;
 	}
 
-	var idx_1 = id.x * image_cfg.offset[1].x + id.y * image_cfg.offset[0].x;
-	var idx_2 = id.x * data_cfg.offset[1].x + id.y * data_cfg.offset[0].x;
+	var idx_1 = image_idx(array(id.y, id.x));
+	var idx_2 = data_idx(array(id.y, id.x));
 
 	var prev = f32((image[idx_1] & cfg.bit_mask) >> cfg.bit_offset) / 255.0;
 	var color = u32(clamp(prev + data[idx_2], 0.0, 1.0) * 255.0);

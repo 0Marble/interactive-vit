@@ -12,20 +12,20 @@ override WRK_SIZE = ${WRK_SIZE};
 fn main(@builtin(global_invocation_id) id: vec3u) {
 	var x = id.x;
 	var y = id.y;
-	if (x >= output_cfg.size[1].x || y >= output_cfg.size[0].x) {
+	if (!output_in_bounds(array(y, x))){
 		return;
 	}
 	
 	var sum: f32 = 0.0;
 	for (var j: u32 = 0; j < weight_cfg.size[0].x; j++) {
 		for (var i: u32 = 0; i < weight_cfg.size[1].x; i++) {
-			var a = input[(y + j) * input_cfg.offset[0].x + (x + i) * input_cfg.offset[1].x];
-			var b = weight[j * weight_cfg.offset[0].x + i * weight_cfg.offset[1].x];
-			sum += a * b;
+			var idx_1 = input_idx(array(y + j, x + i));
+			var idx_2 = weight_idx(array(j, i));
+			sum += input[idx_1] * weight[idx_2];
 		}
 	}
 
-	output[id.x * output_cfg.offset[1].x + id.y * output_cfg.offset[0].x] = sum;
+	output[output_idx(array(y, x))] = sum;
 }
 `;
 

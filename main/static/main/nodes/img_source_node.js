@@ -3,7 +3,6 @@ import * as gpu from "../gpu.js";
 
 const WRK_SIZE = 16;
 const split_kernel_src = `
-
 ${gpu.shader_tesnor_def(0, 0, "read", "image", "u32", 2)}
 ${gpu.shader_tesnor_def(1, 0, "read_write", "r_channel", "f32", 2)}
 ${gpu.shader_tesnor_def(2, 0, "read_write", "g_channel", "f32", 2)}
@@ -12,18 +11,18 @@ ${gpu.shader_tesnor_def(3, 0, "read_write", "b_channel", "f32", 2)}
 override WRK_SIZE = ${WRK_SIZE};
 @compute @workgroup_size(WRK_SIZE, WRK_SIZE)
 fn main(@builtin(global_invocation_id) id: vec3u) {
-	if (id.x >= image_cfg.size[1].x || id.y >= image_cfg.size[0].x) {
+	if (!image_in_bounds(array(id.y, id.x))) {
 		return;
 	}
 
-	var idx = id.x * image_cfg.offset[1].x + id.y * image_cfg.offset[0].x;
+	var idx = image_idx(array(id.y, id.x));
 	var r = f32((image[idx] & 0x000000FF) >> 0) / 255;
 	var g = f32((image[idx] & 0x0000FF00) >> 8) / 255;
 	var b = f32((image[idx] & 0x00FF0000) >> 16) / 255;
 
-	r_channel[id.x * r_channel_cfg.offset[1].x + id.y * r_channel_cfg.offset[0].x] = r;
-	g_channel[id.x * g_channel_cfg.offset[1].x + id.y * g_channel_cfg.offset[0].x] = g;
-	b_channel[id.x * b_channel_cfg.offset[1].x + id.y * b_channel_cfg.offset[0].x] = b;
+	r_channel[r_channel_idx(array(id.y, id.x))] = r;
+	g_channel[g_channel_idx(array(id.y, id.x))] = g;
+	b_channel[b_channel_idx(array(id.y, id.x))] = b;
 }
 `;
 
