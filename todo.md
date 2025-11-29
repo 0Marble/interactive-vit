@@ -18,6 +18,9 @@
 
 # Log
 
+- 29.11.2025:
+    1. Support tensor strides+offsets
+
 - 28.11.2025:
     1. Save/Share graphs part 1: save/load on the client
     2. Ability to load graphs from the server
