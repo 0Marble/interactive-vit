@@ -1,9 +1,12 @@
 from django.shortcuts import render
 import django.http as http
 from django.template import loader
+import logging
 import torch
 
 from main.message import Message
+
+logger = logging.getLogger(__name__)
 
 def description(request):
     return http.JsonResponse([
@@ -23,14 +26,13 @@ def contents(request: http.HttpRequest):
 
     return http.HttpResponse(f"cos({A}x+{b})")
 
-# computes cos(Ax+b)
 def compute(request: http.HttpRequest):
     try:
         assert request.method == "POST"
 
         msg = Message()
         msg.decode(request.body)
-        params = request.POST
+        params = request.GET
 
         A = params.get("A") 
         if A is None: A = 1.0
@@ -40,15 +42,12 @@ def compute(request: http.HttpRequest):
         if b is None: b = 0.0
         else: b = float(b)
 
-        dims, data = msg.get("o")
+        t = msg.get("o")
 
-        t = torch.tensor(data).reshape(dims.tolist())
         t = torch.cos(A * t + b)
-        data.clear()
-        data.frombytes(t.numpy().tobytes())
 
         msg.clear()
-        msg.set("o", dims, data)
+        msg.set("o", t)
         res = msg.encode()
         return http.HttpResponse(res)
     except Exception as e:

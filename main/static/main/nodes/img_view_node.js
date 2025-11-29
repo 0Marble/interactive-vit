@@ -83,7 +83,7 @@ export class ImgViewNode extends graph.Node {
 		this.canvas.width = size.w;
 		this.canvas.height = size.h;
 
-		const output = new gpu.Tensor([size.h, size.w], 4);
+		const output = gpu.Tensor.from_dims_and_data(4, [size.h, size.w]);
 		this.merge.set_tensor(0, 0, output);
 		for (const edge of this.inputs()) {
 			/**

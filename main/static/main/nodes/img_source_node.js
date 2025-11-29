@@ -86,10 +86,10 @@ export class ImgSourceNode extends graph.Node {
 		const img_data = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
 
 		const bufs = [
-			new gpu.Tensor([this.canvas.height, this.canvas.width], 4, img_data.data),
-			new gpu.Tensor([this.canvas.height, this.canvas.width], 4),
-			new gpu.Tensor([this.canvas.height, this.canvas.width], 4),
-			new gpu.Tensor([this.canvas.height, this.canvas.width], 4),
+			gpu.Tensor.from_dims_and_data(4, [this.canvas.height, this.canvas.width], img_data.data),
+			gpu.Tensor.from_dims_and_data(4, [this.canvas.height, this.canvas.width]),
+			gpu.Tensor.from_dims_and_data(4, [this.canvas.height, this.canvas.width]),
+			gpu.Tensor.from_dims_and_data(4, [this.canvas.height, this.canvas.width]),
 		];
 		bufs.forEach((tensor, group) => this.kernel.set_tensor(group, 0, tensor));
 

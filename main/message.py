@@ -1,21 +1,23 @@
 import array
 import io
+import torch
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Message:
     def __init__(self):
-        # self.tensors: Map<string, (dims, data)>
-        # dims: array.array("I")
-        # data: array.array("f")
+        # self.tensors: Map<string, torch.tensor>
         self.tensors = {}
 
     def clear(self):
         self.tensors = {}
 
-    def get(self, channel: str):
+    def get(self, channel: str) -> torch.tensor:
         return self.tensors[channel]
 
-    def set(self, channel, dims: array.array, data: array.array):
-        self.tensors[channel] = (dims, data)
+    def set(self, channel, t: torch.tensor):
+        self.tensors[channel] = t
     
     def encode(self):
         network = "big"
@@ -23,7 +25,19 @@ class Message:
         writer.write(int.to_bytes(len(self.tensors), 4, network))
 
         for channel in self.tensors.keys():
-            (dims, data) = self.tensors[channel]
+            t: torch.tensor = self.tensors[channel]
+
+            data = array.array('f')
+            data.frombytes(t.numpy().tobytes())
+
+            dims = array.array('I')
+            dims.fromlist(list(t.shape))
+
+            strides = array.array('I')
+            strides.fromlist(list(t.stride()))
+
+            offset = t.storage_offset()
+
             enc = channel.encode(encoding="utf8")
             writer.write(int.to_bytes(len(enc), 4, network))
             writer.write(enc)
@@ -34,6 +48,8 @@ class Message:
 
             writer.write(int.to_bytes(len(dims), 4, network))
             writer.write(dims.tobytes())
+            writer.write(strides.tobytes())
+            writer.write(int.to_bytes(offset, 4, network))
             writer.write(data.tobytes())
 
         return writer.getbuffer()
@@ -56,6 +72,9 @@ class Message:
             n_dim = int.from_bytes(reader.read(4), byteorder=network, signed=False)
             dims = array.array('I')
             dims.frombytes(reader.read(4 * n_dim))
+            strides = array.array('I')
+            strides.frombytes(reader.read(4 * n_dim))
+            offset = int.from_bytes(reader.read(4), byteorder=network, signed=False)
 
             elem_cnt = 1
             for d in dims: elem_cnt *= d
@@ -63,5 +82,8 @@ class Message:
             data = array.array('f')
             data.frombytes(reader.read(4 * elem_cnt))
 
-            self.tensors[channel] = (dims, data);
+            t = torch.tensor(data)
+            t = torch.as_strided(t, dims.tolist(), strides.tolist(), storage_offset=offset)
+            self.tensors[channel] = t;
+
 

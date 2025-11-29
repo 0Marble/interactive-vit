@@ -46,7 +46,7 @@ export class Conv2dNode extends graph.Node {
 
 		this.kernel = new gpu.Kernel(conv2d_src);
 
-		this.matrix_tensor = new gpu.Tensor([this.h, this.w], 4, new Uint8Array(this.matrix.buffer));
+		this.matrix_tensor = gpu.Tensor.from_dims_and_data(4, [this.h, this.w], this.matrix.buffer);
 		this.matrix_changed = false;
 		this.kernel.set_tensor(1, 0, this.matrix_tensor);
 		this.matrix_tensor.to_cpu().then(buf => console.log("conv2d_matrix:", buf));
@@ -172,19 +172,16 @@ export class Conv2dNode extends graph.Node {
 			return null;
 		}
 
-		const output = new gpu.Tensor(
-			[
-				size.h - 2 * Math.floor(this.h / 2),
-				size.w - 2 * Math.floor(this.w / 2),
-			],
-			4,
-		);
+		const out_size = {
+			h: size.h - 2 * Math.floor(this.h / 2),
+			w: size.w - 2 * Math.floor(this.w / 2),
+		};
+		const output = gpu.Tensor.from_dims_and_data(4, [out_size.h, out_size.w]);
 
 		if (this.matrix_changed) {
 			this.matrix_changed = false;
-			this.matrix_tensor = new gpu.Tensor([this.h, this.w], 4, new Uint8Array(this.matrix.buffer));
+			this.matrix_tensor = gpu.Tensor.from_dims_and_data(4, [this.h, this.w], this.matrix.buffer);
 			this.kernel.set_tensor(1, 0, this.matrix_tensor);
-			console.log("conv2d_matrix:", await this.matrix_tensor.to_cpu());
 		}
 
 		this.kernel.set_tensor(0, 0, input);

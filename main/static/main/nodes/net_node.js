@@ -163,46 +163,67 @@ class Message {
 	 */
 	async decode(buffer) {
 		const view = new DataView(buffer);
-		let offset = 0;
+		let buffer_offset = 0;
 
-		const num_packets = view.getUint32(offset);
-		offset += 4;
+		const num_packets = view.getUint32(buffer_offset);
+		buffer_offset += 4;
 		this.all_tensors = [];
 
 		console.debug(`Message.decode: byte_size = ${buffer.byteLength}`);
 
 		for (let i = 0; i < num_packets; i++) {
-			const channel_len = view.getUint32(offset);
-			offset += 4;
-			const str = new TextDecoder().decode(new Uint8Array(buffer, offset, channel_len));
-			offset += channel_len;
+			const channel_len = view.getUint32(buffer_offset);
+			buffer_offset += 4;
+			const str = new TextDecoder().decode(new Uint8Array(buffer, buffer_offset, channel_len));
+			buffer_offset += channel_len;
+			buffer_offset = add_padding(buffer_offset, 4);
 
-			offset = add_padding(offset, 4);
-			const dim_cnt = view.getUint32(offset);
-			offset += 4;
-			const dims_array = new Uint32Array(buffer, offset, dim_cnt);
+			const dim_cnt = view.getUint32(buffer_offset);
+			buffer_offset += 4;
+
+			const dims_array = new Uint32Array(buffer, buffer_offset, dim_cnt);
 			const dims = []
 			let elem_cnt = 1;
 			for (const d of dims_array) {
 				dims.push(d);
 				elem_cnt *= d;
 			}
-			console.debug(`Message.decode: ${str}.dims = ${dims}`);
+			buffer_offset += 4 * dim_cnt;
 
-			offset += 4 * dim_cnt;
-			const data = new Float32Array(buffer, offset, elem_cnt);
-			offset += 4 * elem_cnt;
+			const strides_array = new Uint32Array(buffer, buffer_offset, dim_cnt);
+			const strides = [];
+			for (const s of strides_array) {
+				strides.push(s);
+			}
+			buffer_offset += 4 * dim_cnt;
+			const offset = view.getUint32(buffer_offset);
+			buffer_offset += 4;
 
-			const tensor = new gpu.Tensor(dims, 4);
+			const data = new Float32Array(buffer, buffer_offset, elem_cnt);
+			buffer_offset += 4 * elem_cnt;
+
+			const tensor = new gpu.Tensor(4, elem_cnt);
 			tensor.from_cpu(data);
+			tensor.dims = dims;
+			tensor.strides = strides;
+			tensor.offset = offset;
+
 			this.all_tensors.push({ channel: str, tensor });
+
+			console.debug(`Message.decode: ${str}.dims = ${dims}`);
+			console.debug(`Message.decode: ${str}.strides = ${strides}`);
+			console.debug(`Message.decode: ${str}.offset = ${offset}`);
 
 		}
 	}
 
 	async encode() {
 		// [num_packets | packet1 | packet2 .... ]
-		// [ channel_len (u32, utf8) | channel (utf8) | n_dims (u32) | dims (u32) | data (f32) ]
+		// [ 
+		//		channel_len (u32, utf8) | channel (utf8) | padding |
+		//		n_dims (u32) | dims (u32) | strides (u32) | offset (u32) | 
+		//		data (f32) 
+		// ]
 
 		let byte_size = 4;
 		const offsets = [];
@@ -215,9 +236,13 @@ class Message {
 			byte_size += 4;
 			byte_size += enc.encode(t.channel).length;
 			byte_size = add_padding(byte_size, 4);
+
 			byte_size += 4;
 			byte_size += 4 * t.tensor.dims.length;
+			byte_size += 4 * t.tensor.strides.length;
+			byte_size += 4;
 			byte_size += 4 * t.tensor.elem_cnt;
+
 			promises.push(t.tensor.to_cpu().then(buf => { return { buf, i }; }));
 		}
 		offsets.push(byte_size);
@@ -229,29 +254,37 @@ class Message {
 
 		console.debug(`Message.encode: byte_size = ${buffer.byteLength}`);
 		for (const t of buffers) {
-			let offset = offsets[t.i];
+			let buffer_offset = offsets[t.i];
+
 			const dims = this.all_tensors[t.i].tensor.dims;
+			const strides = this.all_tensors[t.i].tensor.strides;
+			const offset = this.all_tensors[t.i].tensor.offset;
 			const channel = this.all_tensors[t.i].channel;
 			const elem_cnt = this.all_tensors[t.i].tensor.elem_cnt;
 
 			console.debug(`Message.encode: ${channel}.dims = ${dims}`);
+			console.debug(`Message.encode: ${channel}.strides = ${strides}`);
 
 			const enc = new TextEncoder().encode(channel);
-			view.setUint32(offset, enc.length);
-			offset += 4;
-			new Uint8Array(buffer, offset, enc.length).set(enc);
-			offset += enc.length;
+			view.setUint32(buffer_offset, enc.length);
+			buffer_offset += 4;
+			new Uint8Array(buffer, buffer_offset, enc.length).set(enc);
+			buffer_offset += enc.length;
+			buffer_offset = add_padding(buffer_offset, 4);
 
-			offset = add_padding(offset, 4);
-			view.setUint32(offset, dims.length);
-			offset += 4;
-			new Uint32Array(buffer, offset, dims.length).set(dims);
+			view.setUint32(buffer_offset, dims.length);
+			buffer_offset += 4;
+			new Uint32Array(buffer, buffer_offset, dims.length).set(dims);
+			buffer_offset += 4 * dims.length;
+			new Uint32Array(buffer, buffer_offset, strides.length).set(strides);
+			buffer_offset += 4 * strides.length;
+			view.setUint32(buffer_offset, offset);
+			buffer_offset += 4;
 
-			offset += 4 * dims.length;
-			new Float32Array(buffer, offset, elem_cnt).set(new Float32Array(t.buf));
-			offset += 4 * elem_cnt;
+			new Float32Array(buffer, buffer_offset, elem_cnt).set(new Float32Array(t.buf));
+			buffer_offset += 4 * elem_cnt;
 
-			console.assert(offset === offsets[t.i + 1]);
+			console.assert(buffer_offset === offsets[t.i + 1]);
 		}
 
 		return buffer;

@@ -17,7 +17,6 @@ def description(request):
 def contents(request: http.HttpRequest):
     return http.HttpResponse("Convolution")
 
-# computes cos(Ax+b)
 def compute(request: http.HttpRequest):
     try:
         assert request.method == "POST"
@@ -25,11 +24,9 @@ def compute(request: http.HttpRequest):
         msg = Message()
         msg.decode(request.body)
 
-        dims, data = msg.get("o")
-
-        dims_list = dims.tolist()
-        dims_list.insert(0, 1) # [C=1, H, W]
-        t = torch.tensor(data).reshape(dims_list)
+        t = msg.get("o")
+        h, w = t.shape
+        t = t.reshape((1, h, w))
 
         with torch.no_grad():
             weight = torch.tensor([[[[-1,-1,-1],[2,2,2],[-1,-1,-1]]]], dtype=torch.float)
@@ -37,14 +34,10 @@ def compute(request: http.HttpRequest):
             conv.weight = torch.nn.Parameter(weight)
             t = conv(t)
         _, h, w = t.shape
-
-        data.clear()
-        data.frombytes(t.numpy().tobytes())
+        t = t.reshape((h, w))
 
         msg.clear()
-        out_dims = array.array("I")
-        out_dims.fromlist([h, w])
-        msg.set("o", out_dims, data)
+        msg.set("o", t)
         res = msg.encode()
         return http.HttpResponse(res)
     except Exception as e:

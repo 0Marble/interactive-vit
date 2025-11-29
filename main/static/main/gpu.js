@@ -111,8 +111,8 @@ export class Kernel {
 	 * @param {Tensor} tensor 
 	 */
 	set_tensor(group, binding_offset, tensor) {
-		this.set_binding(group, binding_offset + 0, tensor.data_buffer);
-		this.set_binding(group, binding_offset + 1, tensor.cfg_buffer);
+		this.set_binding(group, binding_offset + 0, tensor.get_data_buffer());
+		this.set_binding(group, binding_offset + 1, tensor.get_cfg_buffer());
 	}
 
 	/**
@@ -143,56 +143,66 @@ export class Kernel {
 }
 
 export class Tensor {
-	/**
-	 * @param {number[]} dims 
-	 * @param {number} elem_size
-	 * @param {ArrayBuffer | undefined} value
-	 */
-	constructor(dims, elem_size, value) {
-		this.dims = dims;
-		this.strides = [];
+	constructor(elem_size, elem_cnt) {
+		this.elem_size = elem_size;
+		this.elem_cnt = elem_cnt;
+		this.byte_size = elem_size * elem_cnt;
+		this.dims = [elem_cnt];
+		this.strides = [1];
 		this.offset = 0;
 
-		this.elem_size = elem_size;
-		this.byte_size = elem_size;
-		this.elem_cnt = 1;
-		for (const m of dims) {
-			this.byte_size *= m;
-			this.elem_cnt *= m;
-			this.strides.push(1);
+		this.data_buffer = null;
+		this.cfg_buffer = null;
+	}
+
+	static from_dims_and_data(elem_size, dims, data) {
+		let elem_cnt = 1;
+		const strides = [];
+		for (const d of dims) {
+			strides.push(1);
+			elem_cnt *= d;
 		}
-		for (let i = 1; i < this.dims.length; i++) {
-			const j = this.dims.length - i - 1;
-			this.strides[j] = this.strides[j + 1] * this.dims[j + 1];
-		}
-
-		this.data_buffer = Runtime.device.createBuffer({
-			size: this.byte_size,
-			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
-			mappedAtCreation: (value ? true : false),
-		});
-
-		this.cfg_buffer = Runtime.device.createBuffer({
-			size: this.dims.length * 16 * 2 + 16,
-			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-			mappedAtCreation: true,
-		});
-
-		if (value) {
-			new Uint8Array(this.data_buffer.getMappedRange()).set(value);
-			this.data_buffer.unmap();
+		for (let i = 1; i < dims.length; i++) {
+			const j = dims.length - i - 1;
+			strides[j] = strides[j + 1] * dims[j + 1];
 		}
 
-		const cfg = new Uint32Array(this.cfg_buffer.getMappedRange());
-		for (let i = 0; i < this.dims.length; i++) {
-			const d = this.dims[i];
-			const o = this.strides[i];
-			cfg[4 * i + 0] = d;
-			cfg[4 * i + 4 * this.dims.length] = o;
-		}
-		cfg[4 * 4 * 2 * this.dims.length] = this.offset;
+		const t = new Tensor(elem_size, elem_cnt);
+		if (data) t.from_cpu(data);
+		t.dims = dims;
+		t.strides = strides;
 
-		this.cfg_buffer.unmap();
+		return t;
+	}
+
+	get_data_buffer() {
+		if (!this.data_buffer) {
+			this.data_buffer = Runtime.device.createBuffer({
+				size: this.byte_size,
+				usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+			});
+		}
+		return this.data_buffer;
+	}
+
+	get_cfg_buffer() {
+		if (!this.cfg_buffer) {
+			this.cfg_buffer = Runtime.device.createBuffer({
+				size: this.dims.length * 2 * 16 + 16,
+				usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+				mappedAtCreation: true,
+			});
+
+			const cfg = new Uint32Array(this.cfg_buffer.getMappedRange());
+			for (let i = 0; i < this.dims.length; i++) {
+				cfg[4 * i] = this.dims[i];
+				cfg[4 * i + 4 * this.dims.length] = this.strides[i];
+			}
+			cfg[2 * 4 * this.dims.length] = this.offset;
+			this.cfg_buffer.unmap();
+		}
+
+		return this.cfg_buffer;
 	}
 
 	/**
@@ -221,7 +231,7 @@ export class Tensor {
 			usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
 		});
 		const cmd = Runtime.device.createCommandEncoder();
-		cmd.copyBufferToBuffer(this.data_buffer, staging, this.byte_size);
+		cmd.copyBufferToBuffer(this.get_data_buffer(), staging, this.byte_size);
 		Runtime.device.queue.submit([cmd.finish()]);
 		await staging.mapAsync(GPUMapMode.READ, 0, this.byte_size);
 		const res = staging.getMappedRange(0, this.byte_size).slice(0)
@@ -233,7 +243,7 @@ export class Tensor {
 	 * @param {ArrayBuffer} data 
 	 */
 	from_cpu(data) {
-		Runtime.device.queue.writeBuffer(this.data_buffer, 0, data);
+		Runtime.device.queue.writeBuffer(this.get_data_buffer(), 0, data);
 	}
 }
 
