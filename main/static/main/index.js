@@ -6,6 +6,7 @@ import { ImgSourceNode } from "./nodes/img_source_node.js";
 import { ImgViewNode } from "./nodes/img_view_node.js";
 import { Conv2dNode } from "./nodes/conv2d_node.js";
 import { NetworkNode } from "./nodes/net_node.js";
+import { SliceNode } from "./nodes/index.js";
 
 await gpu.init();
 
@@ -15,8 +16,8 @@ async function init_toolbar() {
 	toolbar.appendChild(await ImgSourceNode.register_factory());
 	toolbar.appendChild(await ImgViewNode.register_factory());
 	toolbar.appendChild(await Conv2dNode.register_factory());
-	toolbar.appendChild(await NetworkNode.register_factory("cos", { A: 1.0, b: 1.0 }));
 	toolbar.appendChild(await NetworkNode.register_factory("conv", {}));
+	toolbar.appendChild(await SliceNode.register_factory());
 
 	toolbar.appendChild(await init_loader());
 

@@ -117,3 +117,13 @@
    border: 1px solid #888;
    width: 80%; 
 }
+
+.index_node_dims{
+   display: flex;
+   width: 100%;
+}
+
+.index_node_dim_input {
+   width: 1em;
+   border: none;
+}

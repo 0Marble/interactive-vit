@@ -38,7 +38,9 @@ function init_load_from_buitlin(modal, name) {
 		modal.close();
 	});
 
-	return button;
+	const div = document.createElement("div");
+	div.appendChild(button)
+	return div;
 }
 
 /**
