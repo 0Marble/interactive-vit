@@ -16,7 +16,6 @@ async function init_toolbar() {
 	toolbar.appendChild(await ImgSourceNode.register_factory());
 	toolbar.appendChild(await ImgViewNode.register_factory());
 	toolbar.appendChild(await Conv2dNode.register_factory());
-	toolbar.appendChild(await NetworkNode.register_factory("conv", {}));
 	toolbar.appendChild(await SliceNode.register_factory());
 
 	toolbar.appendChild(await init_loader());

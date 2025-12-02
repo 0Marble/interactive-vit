@@ -63,7 +63,7 @@ export class ImgViewNode extends graph.Node {
 			if (!packet) return null;
 
 			if (packet.dims.length !== 2) {
-				console.error(`Invalid input on ImgViewNode ${this}. Expected a 2d buffer`);
+				console.error(`Invalid input on ImgViewNode ${this}. Expected a 2d buffer, got ${packet.dims}`);
 				return null;
 			}
 			const w = packet.dims[1];

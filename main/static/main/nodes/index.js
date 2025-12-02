@@ -13,7 +13,7 @@ class IndexNode extends graph.Node {
 		/**
 		 * @type {Map<number,number>}
 		 */
-		this.free_dims = new Set();
+		this.free_dims = new Map();
 
 		this.dim_cnt = 0;
 
@@ -28,9 +28,19 @@ class IndexNode extends graph.Node {
 		 */
 		const input = await e.read_packet();
 		if (!input) return null;
-		if (input.is_Nd(this.dim_cnt)) return null;
+		if (!input.is_Nd(this.dim_cnt)) {
+			console.error(
+				`IndexNode(${this}): invalid input size, got`,
+				input.dims.length,
+				"expected",
+				this.dim_cnt,
+			);
+			return null;
+		}
 
 		const output = new gpu.Tensor(4, 0);
+		output.dims = [];
+		output.strides = [];
 		output.data_buffer = input.data_buffer;
 		output.offset = input.offset;
 		for (let i = 0; i < this.free_dims.size; i++) {
@@ -46,6 +56,10 @@ class IndexNode extends graph.Node {
 			output.dims[order] = input.dims[dim];
 			output.strides[order] = input.strides[dim];
 		}
+
+		const pinout = new graph.Pinout();
+		pinout.set("o", output);
+		return pinout;
 	}
 
 	input_names() {
@@ -54,6 +68,23 @@ class IndexNode extends graph.Node {
 
 	output_names() {
 		return ["o"];
+	}
+
+	serialize() {
+		const fixed = [];
+		for (const [dim, val] of this.fixed_dims) {
+			fixed.push({ dim, val });
+		}
+		const free = [];
+		for (const [in_dim, out_dim] of this.free_dims) {
+			free.push({ in_dim, out_dim });
+		}
+
+		return {
+			kind: "index",
+			fixed,
+			free,
+		};
 	}
 }
 
@@ -92,16 +123,8 @@ export class SliceNode extends IndexNode {
 					return;
 				}
 				await graph.Context.wait_for_not_in_eval();
-				let out_idx = 0;
-				for (let i = 0; i < this.dim_cnt; i++) {
-					const val = dim_inputs[i].value;
-					if (val === ":") {
-						this.free_dims.set(i, out_idx);
-						out_idx++;
-					} else if (+val !== NaN) {
-						this.fixed_dims.set(i, +val);
-					}
-				}
+				graph.Context.schedule_eval(this);
+				this.read_inputs(dim_inputs);
 				await graph.Context.do_eval();
 			});
 		}
@@ -116,9 +139,14 @@ export class SliceNode extends IndexNode {
 
 		const plus_button = document.createElement("button");
 		plus_button.textContent = "+";
-		plus_button.addEventListener("click", () => {
+		plus_button.addEventListener("click", async () => {
+			await graph.Context.wait_for_not_in_eval();
+			graph.Context.schedule_eval(this);
+
 			this.dim_cnt++;
 			this.draw_content();
+
+			await graph.Context.do_eval();
 		});
 
 		div.appendChild(plus_button);
@@ -128,9 +156,22 @@ export class SliceNode extends IndexNode {
 		this.content_div.appendChild(div);
 	}
 
-	serialize() {
-		throw new Error("SliceNode.serialize(): todo");
+	read_inputs(dim_inputs) {
+		this.free_dims.clear();
+		this.fixed_dims.clear();
+
+		let out_idx = 0;
+		for (let i = 0; i < this.dim_cnt; i++) {
+			const val = dim_inputs[i].value;
+			if (val === ":") {
+				this.free_dims.set(i, out_idx);
+				out_idx++;
+			} else if (+val !== NaN) {
+				this.fixed_dims.set(i, +val);
+			}
+		}
 	}
+
 
 	static async register_factory() {
 		const node_button = document.createElement("button");
@@ -144,18 +185,31 @@ export class SliceNode extends IndexNode {
 		return node_button;
 	}
 
+	/**
+	 * @returns{Promise<SliceNode>}
+	 */
 	static async create() {
 		await graph.Context.wait_for_not_in_eval();
 		return new SliceNode();
 	}
 
 	serialize() {
-		return {
-			kind: "slice",
-		};
+		const obj = super.serialize();
+		obj.kind = "slice";
+		return obj;
 	}
 
-	static async deserialize(_obj) {
-		return await SliceNode.create();
+	static async deserialize(obj) {
+		const node = await SliceNode.create();
+		for (const { dim, val } of obj.fixed) {
+			node.fixed_dims.set(dim, val);
+		}
+		for (const { in_dim, out_dim } of obj.free) {
+			node.free_dims.set(in_dim, out_dim);
+		}
+		node.dim_cnt = node.free_dims.size + node.fixed_dims.size;
+		node.draw_content();
+
+		return node;
 	}
 }

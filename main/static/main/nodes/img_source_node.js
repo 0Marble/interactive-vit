@@ -2,27 +2,25 @@ import * as graph from "../graph.js";
 import * as gpu from "../gpu.js";
 
 const WRK_SIZE = 16;
-const split_kernel_src = `
-${gpu.shader_tesnor_def(0, 0, "read", "image", "u32", 2)}
-${gpu.shader_tesnor_def(1, 0, "read_write", "r_channel", "f32", 2)}
-${gpu.shader_tesnor_def(2, 0, "read_write", "g_channel", "f32", 2)}
-${gpu.shader_tesnor_def(3, 0, "read_write", "b_channel", "f32", 2)}
+const to_rgb_src = `
+${gpu.shader_tesnor_def(0, 0, "read", "input", "u32", 2)}
+${gpu.shader_tesnor_def(1, 0, "read_write", "output", "f32", 3)}
 
 override WRK_SIZE = ${WRK_SIZE};
 @compute @workgroup_size(WRK_SIZE, WRK_SIZE)
 fn main(@builtin(global_invocation_id) id: vec3u) {
-	if (!image_in_bounds(array(id.y, id.x))) {
+	if (!input_in_bounds(array(id.y, id.x))) {
 		return;
 	}
 
-	var idx = image_idx(array(id.y, id.x));
-	var r = f32((image[idx] & 0x000000FF) >> 0) / 255;
-	var g = f32((image[idx] & 0x0000FF00) >> 8) / 255;
-	var b = f32((image[idx] & 0x00FF0000) >> 16) / 255;
+	var idx = input_idx(array(id.y, id.x));
+	var r = f32((input[idx] & 0x000000FF) >> 0) / 255;
+	var g = f32((input[idx] & 0x0000FF00) >> 8) / 255;
+	var b = f32((input[idx] & 0x00FF0000) >> 16) / 255;
 
-	r_channel[r_channel_idx(array(id.y, id.x))] = r;
-	g_channel[g_channel_idx(array(id.y, id.x))] = g;
-	b_channel[b_channel_idx(array(id.y, id.x))] = b;
+	output[output_idx(array(0, id.y, id.x))] = r;
+	output[output_idx(array(1, id.y, id.x))] = g;
+	output[output_idx(array(2, id.y, id.x))] = b;
 }
 `;
 
@@ -71,7 +69,7 @@ export class ImgSourceNode extends graph.Node {
 			});
 		});
 
-		this.kernel = new gpu.Kernel(split_kernel_src);
+		this.kernel = new gpu.Kernel(to_rgb_src);
 
 		this.post_init();
 	}
@@ -85,23 +83,18 @@ export class ImgSourceNode extends graph.Node {
 
 		const img_data = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
 
-		const bufs = [
-			gpu.Tensor.from_dims_and_data(4, [this.canvas.height, this.canvas.width], img_data.data),
-			gpu.Tensor.from_dims_and_data(4, [this.canvas.height, this.canvas.width]),
-			gpu.Tensor.from_dims_and_data(4, [this.canvas.height, this.canvas.width]),
-			gpu.Tensor.from_dims_and_data(4, [this.canvas.height, this.canvas.width]),
-		];
-		bufs.forEach((tensor, group) => this.kernel.set_tensor(group, 0, tensor));
+		const input = gpu.Tensor.from_dims_and_data(4, [this.canvas.height, this.canvas.width], img_data.data);
+		const output = gpu.Tensor.from_dims_and_data(4, [3, this.canvas.height, this.canvas.width]);
 
+		this.kernel.set_tensor(0, 0, input);
+		this.kernel.set_tensor(1, 0, output);
 		this.kernel.run([
 			Math.ceil(this.canvas.width / WRK_SIZE),
 			Math.ceil(this.canvas.height / WRK_SIZE),
 		]);
 
 		const pinout = new graph.Pinout();
-		pinout.set("R", bufs[1]);
-		pinout.set("G", bufs[2]);
-		pinout.set("B", bufs[3]);
+		pinout.set("o", output);
 
 		return pinout;
 	}
@@ -111,7 +104,7 @@ export class ImgSourceNode extends graph.Node {
 	 * @returns {Iterable<string>}
 	 */
 	output_names() {
-		return ["R", "G", "B"];
+		return ["o"];
 	}
 
 	draw_content() {
