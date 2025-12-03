@@ -213,3 +213,104 @@ export class SliceNode extends IndexNode {
 		return node;
 	}
 }
+
+export class ShuffleNode extends IndexNode {
+	constructor() {
+		super();
+	}
+
+	draw_content() {
+		while (this.content_div.firstChild) this.content_div.firstChild.remove();
+
+		const div = document.createElement("div");
+		div.className = "index_node_dims";
+
+		const pre = document.createElement("span");
+		pre.textContent = "shuffle([";
+		const post = document.createElement("span");
+		post.textContent = "])";
+
+		const inputs = [];
+		for (let i = 0; i < this.dim_cnt; i++) {
+			const input_elem = document.createElement("input");
+			input_elem.className = "index_node_dim_input";
+			input_elem.type = "text";
+			if (this.free_dims.has(i)) {
+				input_elem.value = this.free_dims.get(i);
+			}
+
+			input_elem.addEventListener("change", async () => {
+				if (+input_elem.value === NaN) return;
+				await graph.Context.wait_for_not_in_eval();
+				graph.Context.schedule_eval(this);
+				this.free_dims.set(i, +input_elem.value);
+				await graph.Context.do_eval();
+			});
+
+			inputs.push(input_elem);
+		}
+
+		const add_dim = document.createElement("button");
+		add_dim.textContent = "+";
+		add_dim.addEventListener("click", async () => {
+			await graph.Context.wait_for_not_in_eval();
+			graph.Context.schedule_eval(this);
+
+			this.dim_cnt++;
+			this.draw_content();
+
+			await graph.Context.do_eval();
+		});
+
+		div.appendChild(pre);
+		for (const input of inputs) {
+			div.appendChild(input);
+			const coma = document.createElement("span");
+			coma.textContent = ",";
+			div.appendChild(coma);
+		}
+		div.appendChild(add_dim);
+		div.appendChild(post);
+		this.content_div.appendChild(div);
+	}
+
+	static async register_factory() {
+		const node_button = document.createElement("button");
+		node_button.textContent = "New Shuffle Node";
+		node_button.addEventListener("click", async () => {
+			await ShuffleNode.create();
+		});
+
+		graph.Context.register_deserializer("shuffle", ShuffleNode.deserialize);
+
+		return node_button;
+	}
+
+	/**
+	 * @returns{Promise<ShuffleNode>}
+	 */
+	static async create() {
+		await graph.Context.wait_for_not_in_eval();
+		return new ShuffleNode();
+	}
+
+	serialize() {
+		const obj = super.serialize();
+		obj.kind = "shuffle";
+		return obj;
+	}
+
+	static async deserialize(obj) {
+		const node = await ShuffleNode.create();
+		for (const { dim, val } of obj.fixed) {
+			node.fixed_dims.set(dim, val);
+		}
+		for (const { in_dim, out_dim } of obj.free) {
+			node.free_dims.set(in_dim, out_dim);
+		}
+		node.dim_cnt = node.free_dims.size + node.fixed_dims.size;
+		node.draw_content();
+
+		return node;
+	}
+}
