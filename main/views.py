@@ -2,6 +2,7 @@ from django.shortcuts import render
 import django.http as http
 from django.template import loader
 from django.conf import settings
+from django.views.static import serve
 
 import logging
 import os
@@ -41,11 +42,8 @@ def load_model(request: http.HttpRequest):
         model_path = os.path.join(all_models_path, model_name)
         if not verify_model(model_path): raise Exception(f"{model_name}: no such model")
 
-        f = open(os.path.join(model_path, "graph.json")) 
-        resp = http.HttpResponse(f.read())
-        resp.headers["Content-Type"] = "application/json"
-        return resp
-
+        file = serve(request, f"{model_name}/graph.json", document_root=all_models_path)
+        return file
     except Exception as e:
         logger.error(e)
         return http.HttpResponseBadRequest(str(e))

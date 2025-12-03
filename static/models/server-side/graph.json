@@ -1,1 +1,0 @@
-{"nodes":[{"instance":{"kind":"img_src"},"pos":{"x":7,"y":143}},{"instance":{"kind":"net_node","endpoint":"cos","params":{"A":2,"b":1}},"pos":{"x":428,"y":473}},{"instance":{"kind":"img_view"},"pos":{"x":655,"y":195}}],"edges":[{"in_port":{"node":0,"channel":"R"},"out_port":{"node":1,"channel":"o"}},{"in_port":{"node":1,"channel":"o"},"out_port":{"node":2,"channel":"R"}}]}

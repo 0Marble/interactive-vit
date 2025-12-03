@@ -643,23 +643,18 @@ export class Context {
 
 	static async deserialize(obj) {
 		/**
-		 * @type{Node[]}
+		 * @type{Promise<Node>[]}
 		 */
-		const nodes = [];
-		obj.nodes.forEach(() => nodes.push(null));
-		/**
-		 * @type{Promise<void>[]}
-		 */
-		const promises = obj.nodes.map((data, i) => {
+		const promises = obj.nodes.map((data) => {
 			const { pos, instance } = data;
 			return Context.deserializers.get(instance.kind)(instance)
 				.then(node => {
 					node.move_to(pos.x, pos.y);
-					nodes[i] = node;
+					return node;
 				});
 		});
 
-		await Promise.all(promises);
+		const nodes = await Promise.all(promises);
 
 		for (const { in_port, out_port } of obj.edges) {
 			const a = new Port(nodes[in_port.node], "out", in_port.channel);
