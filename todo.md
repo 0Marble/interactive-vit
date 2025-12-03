@@ -9,6 +9,7 @@
 
 # Non-critical
 
+- backend Node class: make it easier to implement nodes on the backend, by abstracting away all the http stuff.
 - `net_node` scripting: is it possible to send over logic together with `net_node` contents? 
 - keep track of sizes on the client
 - server-side graph: whole sections of the computation graph can be evaluated on the server, without data going back and forth
