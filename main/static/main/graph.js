@@ -647,11 +647,17 @@ export class Context {
 		 */
 		const promises = obj.nodes.map((data) => {
 			const { pos, instance } = data;
-			return Context.deserializers.get(instance.kind)(instance)
-				.then(node => {
-					node.move_to(pos.x, pos.y);
-					return node;
-				});
+			if (!Context.deserializers.has(instance.kind)) {
+				console.warn("unknown node type: ", instance);
+				return Promise.resolve(null);
+			} else {
+				const fptr = Context.deserializers.get(instance.kind);
+				return fptr(instance)
+					.then(node => {
+						node.move_to(pos.x, pos.y);
+						return node;
+					});
+			}
 		});
 
 		const nodes = await Promise.all(promises);

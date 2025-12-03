@@ -28,7 +28,7 @@ function init_load_from_buitlin(modal, name) {
 	button.textContent = name;
 	button.addEventListener("click", async () => {
 		const params = new URLSearchParams({ name });
-		const url = "load_model?" + params.toString();
+		const url = "load_graph?" + params.toString();
 
 		const resp = await fetch(url);
 		const json = await resp.json();
@@ -50,7 +50,7 @@ async function fetch_model_list(modal, list_div) {
 	while (list_div.firstChild) list_div.firstChild.remove();
 
 	try {
-		const resp = await fetch("list_models");
+		const resp = await fetch("list_graphs");
 		if (!resp.ok) throw new Error("something went wrong");
 		const json = await resp.json();
 		for (const name of json) {

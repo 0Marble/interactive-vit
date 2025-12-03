@@ -6,8 +6,44 @@ from django.views.static import serve
 
 import logging
 import os
+import importlib
+import sys
+import traceback
+
+from main.message import Message
 
 logger = logging.getLogger(__name__)
+
+def setup_model_objects():
+    models_dir = os.path.join(settings.BASE_DIR, "static/models")
+    model_objects = {}
+
+    for model_name in os.listdir(models_dir):
+        path = os.path.join(models_dir, model_name)
+        model_path = os.path.join(path, "model.py")
+
+        if not os.path.isfile(model_path): 
+            continue
+
+        try:
+            spec = importlib.util.spec_from_file_location(model_name, model_path)
+            if spec is None:
+                raise Exception(f"Could not create spec for model '{model_name}'")
+
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[model_name] = module
+            spec.loader.exec_module(module)
+
+            model_obj = module.Model()
+            model_objects[model_name] = model_obj
+
+            logger.error("Registered model '%s'", model_name)
+        except Exception as err:
+            logger.error("Could not register model '%s': %s", model_name, traceback.format_exc())
+
+    return model_objects
+
+models = setup_model_objects()
 
 def index(request):
     template = loader.get_template("main/index.html")
@@ -25,7 +61,7 @@ def verify_model(model_path):
 
 all_models_path = os.path.join(settings.BASE_DIR, "static/models")
 
-def list_models(request: http.HttpRequest):
+def list_graphs(request: http.HttpRequest):
     res = []
     for model_name in os.listdir(all_models_path):
         model_path = os.path.join(all_models_path, model_name)
@@ -34,7 +70,7 @@ def list_models(request: http.HttpRequest):
 
     return http.JsonResponse(res, safe=False)
 
-def load_model(request: http.HttpRequest):
+def load_graph(request: http.HttpRequest):
     try:
         assert request.method == "GET"
         model_name = request.GET.get("name")
@@ -44,6 +80,35 @@ def load_model(request: http.HttpRequest):
 
         file = serve(request, f"{model_name}/graph.json", document_root=all_models_path)
         return file
+    except Exception as e:
+        logger.error(e)
+        return http.HttpResponseBadRequest(str(e))
+
+def model_compute(request: http.HttpRequest, model_name: str, node_name: str):
+    try:
+        assert request.method == "POST"
+
+        msg = Message()
+        msg.decode(request.body)
+        msg = models[model_name].eval_node(node_name, msg)
+        res = msg.encode()
+        return http.HttpResponse(res)
+    except Exception as e:
+        logger.error(traceback.format_exc())
+        return http.HttpResponseBadRequest(str(e))
+
+def model_description(req: http.HttpRequest, model_name: str, node_name: str):
+    try:
+        json = models[model_name].node_io_description(node_name)
+        return http.JsonResponse(json, safe=False)
+    except Exception as e:
+        logger.error(traceback.format_exc())
+        return http.HttpResponseBadRequest(str(e))
+
+def model_contents(req: http.HttpRequest, model_name: str, node_name: str):
+    try:
+        html = models[model_name].node_html_contents(node_name)
+        return http.HttpResponse(html)
     except Exception as e:
         logger.error(e)
         return http.HttpResponseBadRequest(str(e))

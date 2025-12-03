@@ -1,0 +1,160 @@
+{
+		"nodes": [
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.0", "params": {}},
+						"pos": {"x":300,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.1", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.2", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.3", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.4", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.5", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.6", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.7", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.8", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.9", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.10", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.11", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.12", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.13", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.14", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.15", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.16", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.17", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.18", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.19", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.20", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.21", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.22", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.23", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.24", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.25", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.26", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.27", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.28", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.29", "params": {}},
+						"pos": {"x":100,"y":100}
+				},
+				{
+						"instance": {"kind": "net_node", "endpoint": "vgg16/features.30", "params": {}},
+						"pos": {"x":300,"y":300}
+				}
+		],
+		"edges": [
+				{"in_port": {"node": 0, "channel": "o"}, "out_port": {"node": 1, "channel": "o"}},
+				{"in_port": {"node": 1, "channel": "o"}, "out_port": {"node": 2, "channel": "o"}},
+				{"in_port": {"node": 2, "channel": "o"}, "out_port": {"node": 3, "channel": "o"}},
+				{"in_port": {"node": 3, "channel": "o"}, "out_port": {"node": 4, "channel": "o"}},
+				{"in_port": {"node": 4, "channel": "o"}, "out_port": {"node": 5, "channel": "o"}},
+				{"in_port": {"node": 5, "channel": "o"}, "out_port": {"node": 6, "channel": "o"}},
+				{"in_port": {"node": 6, "channel": "o"}, "out_port": {"node": 7, "channel": "o"}},
+				{"in_port": {"node": 7, "channel": "o"}, "out_port": {"node": 8, "channel": "o"}},
+				{"in_port": {"node": 8, "channel": "o"}, "out_port": {"node": 9, "channel": "o"}},
+				{"in_port": {"node": 9, "channel": "o"}, "out_port": {"node": 10, "channel": "o"}},
+				{"in_port": {"node": 10, "channel": "o"}, "out_port": {"node": 11, "channel": "o"}},
+				{"in_port": {"node": 11, "channel": "o"}, "out_port": {"node": 12, "channel": "o"}},
+				{"in_port": {"node": 12, "channel": "o"}, "out_port": {"node": 13, "channel": "o"}},
+				{"in_port": {"node": 13, "channel": "o"}, "out_port": {"node": 14, "channel": "o"}},
+				{"in_port": {"node": 14, "channel": "o"}, "out_port": {"node": 15, "channel": "o"}},
+				{"in_port": {"node": 15, "channel": "o"}, "out_port": {"node": 16, "channel": "o"}},
+				{"in_port": {"node": 16, "channel": "o"}, "out_port": {"node": 17, "channel": "o"}},
+				{"in_port": {"node": 17, "channel": "o"}, "out_port": {"node": 18, "channel": "o"}},
+				{"in_port": {"node": 18, "channel": "o"}, "out_port": {"node": 19, "channel": "o"}},
+				{"in_port": {"node": 19, "channel": "o"}, "out_port": {"node": 20, "channel": "o"}},
+				{"in_port": {"node": 20, "channel": "o"}, "out_port": {"node": 21, "channel": "o"}},
+				{"in_port": {"node": 21, "channel": "o"}, "out_port": {"node": 22, "channel": "o"}},
+				{"in_port": {"node": 22, "channel": "o"}, "out_port": {"node": 23, "channel": "o"}},
+				{"in_port": {"node": 23, "channel": "o"}, "out_port": {"node": 24, "channel": "o"}},
+				{"in_port": {"node": 24, "channel": "o"}, "out_port": {"node": 25, "channel": "o"}},
+				{"in_port": {"node": 25, "channel": "o"}, "out_port": {"node": 26, "channel": "o"}},
+				{"in_port": {"node": 26, "channel": "o"}, "out_port": {"node": 27, "channel": "o"}},
+				{"in_port": {"node": 27, "channel": "o"}, "out_port": {"node": 28, "channel": "o"}},
+				{"in_port": {"node": 28, "channel": "o"}, "out_port": {"node": 29, "channel": "o"}},
+				{"in_port": {"node": 29, "channel": "o"}, "out_port": {"node": 30, "channel": "o"}}
+		]
+}

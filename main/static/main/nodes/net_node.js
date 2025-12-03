@@ -409,13 +409,8 @@ export class NetworkNode extends graph.Node {
 
 		return pinout;
 	}
-	static async register_factory(endpoint, params_obj) {
-		const node_button = document.createElement("button");
-		node_button.textContent = `New Net-${endpoint} Node`;
-		node_button.addEventListener("click", async () => await NetworkNode.create(endpoint, params_obj));
+	static async register_factory() {
 		graph.Context.register_deserializer("net_node", NetworkNode.deserialize);
-
-		return node_button;
 	}
 
 	static async create(endpoint, params_obj) {
