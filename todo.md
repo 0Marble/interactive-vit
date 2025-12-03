@@ -2,7 +2,6 @@
 
 - models: implement a model using server-side nodes
     1. VGG16: looks simple, will get me familiar with the concepts in the field
-- Slice node: `out = in[:, 10, 20]`.
 - Swizzle node: ability to change the order of dimensions `out = in.yxz`. 
 - Zeros node: create a new empty tensor of given shape.
 - Stack node: `out = [a, b, c, d, ...]`. This is tricky, because we only support a pre-defined number of ports.
@@ -17,6 +16,9 @@
 - Admin panel: ability to upload custom client-desgined graphs
 
 # Log
+
+- 02.12.2025:
+    1. Slice node: `out = in[:, 10, 20]`. In addition, the img source node now outputs a CHW shaped tensor.
 
 - 29.11.2025:
     1. Support tensor strides+offsets
