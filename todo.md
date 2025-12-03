@@ -1,11 +1,11 @@
 # Critical
 
 - models: implement a model using server-side nodes
-    1. VGG16: looks simple, will get me familiar with the concepts in the field
 - Zeros node: create a new empty tensor of given shape.
 - Stack node: `out = [a, b, c, d, ...]`. This is tricky, because we only support a pre-defined number of ports.
     1. "Fake" ports: create ports within the content div of the node. Hacky...
     2. Proper dynamic ports support: sounds possible, but there is a large surface for unforseen issues
+- Multi-view node: view all slices of a CHW tensor
 
 # Non-critical
 
@@ -20,6 +20,8 @@
 - 03.12.2025:
     1. Shuffle node: to reorder dimensions
     2. Fix remote file access in `load_model`. Before I used to just use python `open` function to read the file located at `BASE_DIR/static/models/{name}/graph.json` (name is a query parameter) and send this file. This would enable people to do something like `fetch("load_model?name=../../secrets")`. Now I use django's `django.views.static.serve` which has a `parent_dir` parameter, and the function does not allow to get files outside of this dir.
+    3. Implemented a VGG16 model. It is actually pretty simple, since pytorch allows you to run sub-modules of a network separately, by name. I create a `class Model` in the model dir, and then call its interface functions to do computation. 
+    However, it is quite difficult to tell what is going on. I get a (for example) [512, 30, 30] tensor in the middle, and half the outputs are just black, the rest just have a vague outline of the original image.
 
 - 02.12.2025:
     1. Slice node: `out = in[:, 10, 20]`. In addition, the img source node now outputs a CHW shaped tensor.
