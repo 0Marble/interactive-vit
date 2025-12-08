@@ -130,13 +130,14 @@ export class Picker {
 			text.setAttribute("x", text_x);
 			text.setAttribute("y", text_y);
 			text.setAttribute("text-anchor", "middle");
+			text.style = "pointer-events: none;";
 			add_linear(text, "x", this.x, text_x, this.open_speed);
 			add_linear(text, "y", this.y, text_y, this.open_speed);
 
 			svg.appendChild(text);
 
 			circle.addEventListener("click", async () => {
-				await this.options[i].on_click();
+				await this.options[i].on_click(this.x, this.y);
 				this.close();
 			});
 

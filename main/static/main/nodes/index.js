@@ -1,5 +1,6 @@
 import * as graph from "../graph.js";
 import * as gpu from "../gpu.js";
+import * as workspace from "../workspace.js";
 
 class IndexNode extends graph.Node {
 	constructor() {
@@ -172,17 +173,12 @@ export class SliceNode extends IndexNode {
 		}
 	}
 
-
 	static async register_factory() {
-		const node_button = document.createElement("button");
-		node_button.textContent = "New Slice Node";
-		node_button.addEventListener("click", async () => {
-			await SliceNode.create();
-		});
-
 		graph.Context.register_deserializer("slice", SliceNode.deserialize);
-
-		return node_button;
+		workspace.register_tool("Slice", async (x, y) => {
+			const node = await SliceNode.create();
+			node.move_to(x, y);
+		});
 	}
 
 	/**
@@ -275,15 +271,11 @@ export class ShuffleNode extends IndexNode {
 	}
 
 	static async register_factory() {
-		const node_button = document.createElement("button");
-		node_button.textContent = "New Shuffle Node";
-		node_button.addEventListener("click", async () => {
-			await ShuffleNode.create();
-		});
-
 		graph.Context.register_deserializer("shuffle", ShuffleNode.deserialize);
-
-		return node_button;
+		workspace.register_tool("Shuffle", async (x, y) => {
+			const node = await ShuffleNode.create();
+			node.move_to(x, y);
+		});
 	}
 
 	/**

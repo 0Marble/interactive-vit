@@ -7,12 +7,12 @@ const picker = new Picker({
 });
 
 export function init_workspace() {
-	picker.add_option("foo", () => { console.log("picked foo"); });
-	picker.add_option("bar", () => { console.log("picked bar"); });
-	picker.add_option("baz", () => { console.log("picked baz"); });
-
 	graph_div.addEventListener("contextmenu", (e) => {
 		e.preventDefault();
 		picker.open(e.clientX + graph_div.scrollLeft, e.clientY + graph_div.scrollTop);
 	});
+}
+
+export async function register_tool(name, callback) {
+	picker.add_option(name, callback);
 }

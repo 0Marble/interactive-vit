@@ -1,5 +1,6 @@
 import * as gpu from "../gpu.js";
 import * as graph from "../graph.js";
+import * as workspace from "../workspace.js";
 
 const WRK_SIZE = 16;
 const merge_kernel_src = `
@@ -132,13 +133,11 @@ export class ImgViewNode extends graph.Node {
 	}
 
 	static async register_factory() {
-		const node_button = document.createElement("button");
-		node_button.textContent = "New ImgView Node";
-		node_button.addEventListener("click", async () => { await ImgViewNode.create() });
-
 		graph.Context.register_deserializer("img_view", ImgViewNode.deserialize);
-
-		return node_button;
+		workspace.register_tool("ImgView", async (x, y) => {
+			const node = await ImgViewNode.create();
+			node.move_to(x, y);
+		});
 	}
 
 	static async create() {

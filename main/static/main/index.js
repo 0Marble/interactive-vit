@@ -14,18 +14,19 @@ await gpu.init();
 async function init_toolbar() {
 	const toolbar = document.getElementById("toolbar");
 
-	await init_workspace();
-
-	toolbar.appendChild(await ImgSourceNode.register_factory());
-	toolbar.appendChild(await ImgViewNode.register_factory());
-	toolbar.appendChild(await Conv2dNode.register_factory());
-	toolbar.appendChild(await SliceNode.register_factory());
-	toolbar.appendChild(await ShuffleNode.register_factory());
-	await NetworkNode.register_factory();
+	init_workspace();
 
 	toolbar.appendChild(await init_loader());
 	toolbar.appendChild(await init_saver());
 }
+
+await ImgSourceNode.register_factory();
+await ImgViewNode.register_factory();
+await Conv2dNode.register_factory();
+await SliceNode.register_factory();
+await ShuffleNode.register_factory();
+await NetworkNode.register_factory();
+
 
 await init_toolbar();
 

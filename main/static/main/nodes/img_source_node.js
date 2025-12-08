@@ -1,5 +1,6 @@
 import * as graph from "../graph.js";
 import * as gpu from "../gpu.js";
+import * as workspace from "../workspace.js";
 
 const WRK_SIZE = 16;
 const to_rgb_src = `
@@ -112,14 +113,11 @@ export class ImgSourceNode extends graph.Node {
 	}
 
 	static async register_factory() {
-
-		const node_button = document.createElement("button");
-		node_button.textContent = "New ImgSrc Node";
-		node_button.addEventListener("click", async () => { await ImgSourceNode.create(); });
-
 		graph.Context.register_deserializer("img_src", ImgSourceNode.deserialize);
-
-		return node_button;
+		workspace.register_tool("ImgSrc", async (x, y) => {
+			const node = await ImgSourceNode.create();
+			node.move_to(x, y);
+		});
 	}
 
 	static async create() {
