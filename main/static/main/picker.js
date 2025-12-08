@@ -77,11 +77,17 @@ export class Picker {
 		svg.setAttribute("overflow", "visible");
 
 		const angle = Math.PI * 2.0 / this.options.length;
-		const poly_radius = this.expand_amt * this.radius / Math.cos(angle / 2);
+		const poly_radius = (this.expand_amt + 1.0) * this.radius / Math.cos(angle / 2);
 
 		for (let i = 0; i < this.options.length; i++) {
-			const rad_x = Math.sin(angle * i) * this.radius + this.x;
-			const rad_y = Math.cos(angle * i) * this.radius + this.y;
+			const rad1_x1 = Math.sin(angle * i) * this.radius + this.x;
+			const rad1_y1 = Math.cos(angle * i) * this.radius + this.y;
+			const rad1_x2 = Math.sin(angle * i) * this.radius * this.expand_amt + this.x;
+			const rad1_y2 = Math.cos(angle * i) * this.radius * this.expand_amt + this.y;
+			const rad2_x1 = Math.sin(angle * (i + 1)) * this.radius + this.x;
+			const rad2_y1 = Math.cos(angle * (i + 1)) * this.radius + this.y;
+			const rad2_x2 = Math.sin(angle * (i + 1)) * this.radius * this.expand_amt + this.x;
+			const rad2_y2 = Math.cos(angle * (i + 1)) * this.radius * this.expand_amt + this.y;
 
 			const text_x = Math.sin(angle * (i + 0.5)) * this.radius * 0.5 + this.x;
 			const text_y = Math.cos(angle * (i + 0.5)) * this.radius * 0.5 + this.y;
@@ -108,22 +114,32 @@ export class Picker {
 			circle.setAttribute("stroke", "black");
 			circle.setAttribute("stroke-width", 2);
 			circle.setAttribute("clip-path", `url(#${clip.id})`);
-			add_linear(circle, "r", 0, this.radius, this.open_speed);
+			const circle_anim = LinearAnimation.add_and_run(circle, "r", 0, this.radius, this.open_speed);
 
 			svg.appendChild(clip);
 			svg.appendChild(circle);
 
-			const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-			line.setAttribute("x1", this.x);
-			line.setAttribute("y1", this.y);
-			line.setAttribute("x2", rad_x);
-			line.setAttribute("y2", rad_y);
-			line.setAttribute("stroke", "black");
-			line.setAttribute("stroke-width", 2);
-			add_linear(line, "x2", this.x, rad_x, this.open_speed);
-			add_linear(line, "y2", this.y, rad_y, this.open_speed);
+			const line1 = document.createElementNS("http://www.w3.org/2000/svg", "line");
+			line1.setAttribute("x1", this.x);
+			line1.setAttribute("y1", this.y);
+			line1.setAttribute("x2", rad1_x1);
+			line1.setAttribute("y2", rad1_y1);
+			line1.setAttribute("stroke", "black");
+			line1.setAttribute("stroke-width", 2);
+			const line1_x = LinearAnimation.add_and_run(line1, "x2", this.x, rad1_x1, this.open_speed);
+			const line1_y = LinearAnimation.add_and_run(line1, "y2", this.y, rad1_y1, this.open_speed);
+			svg.appendChild(line1);
 
-			svg.appendChild(line);
+			const line2 = document.createElementNS("http://www.w3.org/2000/svg", "line");
+			line2.setAttribute("x1", this.x);
+			line2.setAttribute("y1", this.y);
+			line2.setAttribute("x2", rad2_x1);
+			line2.setAttribute("y2", rad2_y1);
+			line2.setAttribute("stroke", "black");
+			line2.setAttribute("stroke-width", 2);
+			const line2_x = LinearAnimation.add_and_run(line2, "x2", this.x, rad2_x1, this.open_speed);
+			const line2_y = LinearAnimation.add_and_run(line2, "y2", this.y, rad2_y1, this.open_speed);
+			svg.appendChild(line2);
 
 			const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
 			text.textContent = this.options[i].title;
@@ -131,8 +147,8 @@ export class Picker {
 			text.setAttribute("y", text_y);
 			text.setAttribute("text-anchor", "middle");
 			text.style = "pointer-events: none;";
-			add_linear(text, "x", this.x, text_x, this.open_speed);
-			add_linear(text, "y", this.y, text_y, this.open_speed);
+			LinearAnimation.add_and_run(text, "x", this.x, text_x, this.open_speed);
+			LinearAnimation.add_and_run(text, "y", this.y, text_y, this.open_speed);
 
 			svg.appendChild(text);
 
@@ -141,35 +157,20 @@ export class Picker {
 				this.close();
 			});
 
-			let circle_expand_anim = null;
 			circle.addEventListener("mouseenter", () => {
-				const rad = circle.r.animVal.value;
-				if (circle_expand_anim) circle_expand_anim.remove();
-
-				circle.setAttribute("r", this.radius * this.expand_amt);
-				circle_expand_anim = add_linear(
-					circle,
-					"r",
-					rad,
-					this.radius * this.expand_amt,
-					this.open_speed,
-				);
-				circle_expand_anim.beginElement();
+				circle_anim.run(circle_anim.current(), this.radius * this.expand_amt, this.open_speed);
+				line1_x.run(line1_x.current(), rad1_x2, this.open_speed);
+				line1_y.run(line1_y.current(), rad1_y2, this.open_speed);
+				line2_x.run(line2_x.current(), rad2_x2, this.open_speed);
+				line2_y.run(line2_y.current(), rad2_y2, this.open_speed);
 			});
 
 			circle.addEventListener("mouseleave", () => {
-				const rad = circle.r.animVal.value;
-				circle.setAttribute("r", this.radius);
-				if (circle_expand_anim) circle_expand_anim.remove();
-
-				circle_expand_anim = add_linear(
-					circle,
-					"r",
-					rad,
-					this.radius,
-					this.open_speed,
-				);
-				circle_expand_anim.beginElement();
+				circle_anim.run(circle_anim.current(), this.radius, this.open_speed);
+				line1_x.run(line1_x.current(), rad1_x1, this.open_speed);
+				line1_y.run(line1_y.current(), rad1_y1, this.open_speed);
+				line2_x.run(line2_x.current(), rad2_x1, this.open_speed);
+				line2_y.run(line2_y.current(), rad2_y1, this.open_speed);
 			});
 		}
 
@@ -177,13 +178,30 @@ export class Picker {
 	}
 }
 
-function add_linear(node, attrib, a, b, dur) {
-	const anim = document.createElementNS("http://www.w3.org/2000/svg", "animate");
-	anim.setAttribute("attributeName", attrib);
-	anim.setAttribute("from", a);
-	anim.setAttribute("to", b);
-	anim.setAttribute("dur", `${dur}s`);
-	node.appendChild(anim);
+class LinearAnimation {
+	static add_and_run(node, attrib, a, b, dur) {
+		const anim = new LinearAnimation(node, attrib);
+		anim.run(a, b, dur);
+		return anim;
+	}
 
-	return anim;
+	constructor(node, attrib) {
+		this.anim = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+		this.anim.setAttribute("attributeName", attrib);
+		node.appendChild(this.anim);
+		this.node = node;
+		this.attrib = attrib;
+	}
+
+	current() {
+		return this.node[this.attrib].animVal.value;
+	}
+
+	run(a, b, dur) {
+		this.node.setAttribute(this.attrib, b);
+		this.anim.setAttribute("from", a);
+		this.anim.setAttribute("to", b);
+		this.anim.setAttribute("dur", `${dur}s`);
+		this.anim.beginElement();
+	}
 }
