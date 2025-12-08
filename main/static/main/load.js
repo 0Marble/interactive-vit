@@ -87,4 +87,23 @@ export async function init_loader() {
 	return button;
 }
 
+export async function init_saver() {
+	const save = document.createElement("button");
+	save.textContent = "Save";
+	save.addEventListener("click", async () => {
+		await graph.Context.wait_for_not_in_eval();
+		let obj = graph.Context.serialize();
+		let src = JSON.stringify(obj);
 
+		let data = new Blob([src], { type: "text/plain" });
+		let url = URL.createObjectURL(data);
+
+		let a = document.createElement("a");
+		a.href = url;
+		a.download = "graph.json";
+		a.click();
+		URL.revokeObjectURL(url);
+	});
+
+	return save;
+}
