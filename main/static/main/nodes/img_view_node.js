@@ -136,7 +136,8 @@ export class ImgViewNode extends graph.Node {
 		graph.Context.register_deserializer("img_view", ImgViewNode.deserialize);
 		workspace.register_tool("ImgView", async (x, y) => {
 			const node = await ImgViewNode.create();
-			node.move_to(x, y);
+			const rect = node.div.getBoundingClientRect();
+			node.move_to(x - rect.width * 0.5, y - rect.height * 0.5);
 		});
 	}
 

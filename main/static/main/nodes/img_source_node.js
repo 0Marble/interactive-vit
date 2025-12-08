@@ -116,7 +116,8 @@ export class ImgSourceNode extends graph.Node {
 		graph.Context.register_deserializer("img_src", ImgSourceNode.deserialize);
 		workspace.register_tool("ImgSrc", async (x, y) => {
 			const node = await ImgSourceNode.create();
-			node.move_to(x, y);
+			const rect = node.div.getBoundingClientRect();
+			node.move_to(x - rect.width * 0.5, y - rect.height * 0.5);
 		});
 	}
 

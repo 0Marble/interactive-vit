@@ -177,7 +177,8 @@ export class SliceNode extends IndexNode {
 		graph.Context.register_deserializer("slice", SliceNode.deserialize);
 		workspace.register_tool("Slice", async (x, y) => {
 			const node = await SliceNode.create();
-			node.move_to(x, y);
+			const rect = node.div.getBoundingClientRect();
+			node.move_to(x - rect.width * 0.5, y - rect.height * 0.5);
 		});
 	}
 
@@ -274,7 +275,8 @@ export class ShuffleNode extends IndexNode {
 		graph.Context.register_deserializer("shuffle", ShuffleNode.deserialize);
 		workspace.register_tool("Shuffle", async (x, y) => {
 			const node = await ShuffleNode.create();
-			node.move_to(x, y);
+			const rect = node.div.getBoundingClientRect();
+			node.move_to(x - rect.width * 0.5, y - rect.height * 0.5);
 		});
 	}
 

@@ -202,7 +202,8 @@ export class Conv2dNode extends graph.Node {
 		graph.Context.register_deserializer("conv2d", Conv2dNode.deserialize);
 		workspace.register_tool("Conv2d", async (x, y) => {
 			const node = await Conv2dNode.create();
-			node.move_to(x, y);
+			const rect = node.div.getBoundingClientRect();
+			node.move_to(x - rect.width * 0.5, y - rect.height * 0.5);
 		});
 	}
 
