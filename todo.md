@@ -17,6 +17,9 @@
 
 # Log
 
+- 08.12.2025:
+    1. Node picker: create a node at the pointer location.
+
 - 03.12.2025:
     1. Shuffle node: to reorder dimensions
     2. Fix remote file access in `load_model`. Before I used to just use python `open` function to read the file located at `BASE_DIR/static/models/{name}/graph.json` (name is a query parameter) and send this file. This would enable people to do something like `fetch("load_model?name=../../secrets")`. Now I use django's `django.views.static.serve` which has a `parent_dir` parameter, and the function does not allow to get files outside of this dir.
