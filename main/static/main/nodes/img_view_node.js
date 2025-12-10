@@ -63,7 +63,8 @@ export class ImgViewNode extends graph.Node {
 			const packet = await edge.read_packet();
 			if (!packet) return null;
 
-			if (packet.dims.length !== 2) {
+			if (!packet.is_Nd(2)) {
+				console.log(packet);
 				console.error(`Invalid input on ImgViewNode ${this}. Expected a 2d buffer, got ${packet.dims}`);
 				return null;
 			}

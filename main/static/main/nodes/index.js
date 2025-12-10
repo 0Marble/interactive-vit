@@ -99,79 +99,63 @@ export class SliceNode extends IndexNode {
 		while (this.content_div.firstChild) this.content_div.firstChild.remove();
 
 		const div = document.createElement("div");
-		div.className = "index_node_dims";
 
-		const text_start = document.createElement("span");
-		text_start.textContent = "input[";
-		const text_end = document.createElement("span");
-		text_end.textContent = "]";
+		const fmt = new InputFmt();
+		fmt.push_text("y = x[");
 
-		const dim_inputs = [];
 		for (let i = 0; i < this.dim_cnt; i++) {
-			const input = document.createElement("input");
-			input.className = "index_node_dim_input";
-			input.type = "text";
-			dim_inputs.push(input);
-
-			if (this.fixed_dims.has(i)) {
-				input.value = this.fixed_dims.get(i);
-			}
-			if (this.free_dims.has(i)) {
-				input.value = ":";
-			}
-
-			input.addEventListener("change", async () => {
-				if (input.value !== ":" && +input.value === NaN) {
-					return;
-				}
-				await graph.Context.wait_for_not_in_eval();
-				graph.Context.schedule_eval(this);
-				this.read_inputs(dim_inputs);
-				await graph.Context.do_eval();
-			});
+			let value = "";
+			if (this.free_dims.has(i)) value = ":";
+			else if (this.fixed_dims.has(i)) value = this.fixed_dims.get(i);
+			fmt.push_input("input_" + i, value, (value) => this.on_input(i, value));
+			fmt.push_text(", ");
 		}
-
-		div.appendChild(text_start);
-		for (const input of dim_inputs) {
-			div.appendChild(input);
-			const coma = document.createElement("span");
-			coma.textContent = ",";
-			div.appendChild(coma);
-		}
+		fmt.push_text("]");
 
 		const plus_button = document.createElement("button");
 		plus_button.textContent = "+";
+
 		plus_button.addEventListener("click", async () => {
 			await graph.Context.wait_for_not_in_eval();
 			graph.Context.schedule_eval(this);
 
+			const i = this.dim_cnt;
+			fmt.pop();
+			fmt.push_input("input_" + i, "", (value) => this.on_input(i, value));
+			fmt.push_text(", ");
+			fmt.push_text("]");
 			this.dim_cnt++;
-			this.draw_content();
 
 			await graph.Context.do_eval();
 		});
 
-		div.appendChild(plus_button);
-
-		div.appendChild(text_end);
+		div.append(fmt.div, plus_button);
 
 		this.content_div.appendChild(div);
 	}
 
-	read_inputs(dim_inputs) {
-		this.free_dims.clear();
-		this.fixed_dims.clear();
+	async on_input(i, value) {
+		await graph.Context.wait_for_not_in_eval();
 
+		if (value === ":") {
+			this.free_dims.set(i, null);
+		} else if (+value !== NaN) {
+			this.fixed_dims.set(i, +value);
+		} else return;
+
+		graph.Context.schedule_eval(this);
+		await graph.Context.do_eval();
+	}
+
+	async eval() {
 		let out_idx = 0;
 		for (let i = 0; i < this.dim_cnt; i++) {
-			const val = dim_inputs[i].value;
-			if (val === ":") {
-				this.free_dims.set(i, out_idx);
-				out_idx++;
-			} else if (+val !== NaN) {
-				this.fixed_dims.set(i, +val);
-			}
+			if (!this.free_dims.has(i)) continue;
+			this.free_dims.set(i, out_idx);
+			out_idx++;
 		}
+
+		return super.eval();
 	}
 
 	static async register_factory() {
