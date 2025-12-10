@@ -1,6 +1,5 @@
 # Critical
 
-- models: implement a model using server-side nodes
 - Zeros node: create a new empty tensor of given shape.
 - Stack node: `out = [a, b, c, d, ...]`. This is tricky, because we only support a pre-defined number of ports.
     1. "Fake" ports: create ports within the content div of the node. Hacky...
@@ -9,12 +8,17 @@
 
 # Non-critical
 
+- backend Node class: make it easier to implement nodes on the backend, by abstracting away all the http stuff.
 - `net_node` scripting: is it possible to send over logic together with `net_node` contents? 
 - keep track of sizes on the client
 - server-side graph: whole sections of the computation graph can be evaluated on the server, without data going back and forth
 - Admin panel: ability to upload custom client-desgined graphs
 
 # Log
+
+- 10.12.2025:
+    1. Worked on frontend design. I am bad at it lol. Now the main workspace is draggable, and displays a grid to find yourself more easily. 
+    I also removed the ugly toolbar at the top, replacing it with an ugly hamburger menu in the corner.
 
 - 08.12.2025:
     1. Node picker: create a node at the pointer location.
