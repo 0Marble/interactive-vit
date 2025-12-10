@@ -517,7 +517,7 @@ export class Context {
 
 	static start_eval() {
 		Context.is_eval = true;
-		Context.eval_state = new CallbackPromise();
+		Context.eval_signal = new CallbackPromise();
 	}
 
 	static end_eval() {
