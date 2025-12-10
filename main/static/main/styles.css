@@ -12,8 +12,9 @@ body {
    left: 0;
    width: 100vw;
    height: 100vh;
-   overflow: auto;
+   overflow: hidden;
    border: 1px solid #ccc;
+   background-color: #303030;
 }
 
 #edges_svg {

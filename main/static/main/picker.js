@@ -19,8 +19,6 @@ export class Picker {
 		this.div.style = `visibility: hidden;`;
 		this.div.addEventListener("contextmenu", (e) => {
 			e.stopPropagation();
-			e.preventDefault();
-			this.close();
 		});
 		this.div.addEventListener("click", (e) => {
 			e.stopPropagation();

@@ -256,14 +256,24 @@ export class Node {
 	init_drag() {
 		this.div.style = `top: ${this.pos.y}px; left: ${this.pos.x}px;`;
 		let delta = { x: 0, y: 0 };
-		this.div.addEventListener("dragstart", (event) => {
-			delta.x = this.pos.x - event.x;
-			delta.y = this.pos.y - event.y;
-			event.dataTransfer.effectAllowed = "move";
+
+		let in_drag = false;
+		this.div.addEventListener("mousedown", (event) => {
+			if (!in_drag) {
+				delta.x = this.pos.x - event.x;
+				delta.y = this.pos.y - event.y;
+				in_drag = true;
+			}
 		});
-		this.div.draggable = true;
-		this.div.addEventListener("dragend", (event) => {
-			this.move_to(event.x + delta.x, event.y + delta.y);
+
+		this.div.addEventListener("mousemove", (event) => {
+			if (in_drag) {
+				this.move_to(event.x + delta.x, event.y + delta.y);
+			}
+		});
+
+		this.div.addEventListener("mouseup", () => {
+			in_drag = false;
 		});
 	}
 
