@@ -101,7 +101,7 @@ export class SliceNode extends IndexNode {
 		div.className = "index_node_dims";
 
 		const text_start = document.createElement("span");
-		text_start.textContent = "output = input[";
+		text_start.textContent = "input[";
 		const text_end = document.createElement("span");
 		text_end.textContent = "]";
 

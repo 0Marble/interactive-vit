@@ -13,9 +13,6 @@
   <body id="body">
     {% csrf_token %}
 
-    <div id="header">
-      <div id="toolbar"> </div>
-    </div>
 
     <div id="workspace">
       <div id="graph_div"> 
@@ -23,6 +20,12 @@
         <div id="nodes_div"> </div>
       </div>
       <canvas id="grid_canvas"> 
+
+    </div>
+
+    <div id="toolbar_div">
+      <button id="open_toolbar">=</button>
+      <div id="toolbar"></div>
     </div>
 
   </body>

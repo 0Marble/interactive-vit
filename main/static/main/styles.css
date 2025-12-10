@@ -6,6 +6,27 @@ body {
    overflow: hidden;
 }
 
+#toolbar_div {
+   position: absolute;
+   top: 1em;
+   left: 1em;
+}
+
+#toolbar {
+   margin-top: 1em;
+   overflow: auto;
+   visibility: hidden;
+   background-color: #888;
+   padding: 1em;
+   display: flex;
+   flex-direction: column;
+}
+
+#open-toolbar {
+   width: 2em;
+   height: 2em;
+}
+
 #graph_div {
    position: absolute;
    top: 0;
@@ -33,29 +54,6 @@ body {
 #grid_canvas {
    width: 100%;
    height: 100%;
-}
-
-#header {
-   position: fixed;
-   width: 100%;
-   z-index: 100;
-   display: flex;
-   justify-content: center;
-   pointer-events: none;
-}
-
-#toolbar {
-   background-color: white;
-   border: 2px solid black;
-   width: 50%;
-   padding: 1em;
-   display: flex;
-   justify-content: center;
-   pointer-events: auto;
-}
-
-#toolbar button {
-   margin: 1em;
 }
 
 .graph_node {
@@ -116,7 +114,6 @@ body {
    max-width: 20em;
    min-width: 10em;
    max-height: 20em;
-   border: 2px red solid;
 }
 
 .modal_bg {

@@ -16,6 +16,18 @@ async function init_toolbar() {
 
 	toolbar.appendChild(await init_loader());
 	toolbar.appendChild(await init_saver());
+
+	let toolbar_open = false;
+	document.getElementById("open_toolbar").addEventListener("click", (e) => {
+		e.stopPropagation();
+		if (!toolbar_open) {
+			toolbar.style = "visibility: visible;";
+			toolbar_open = true;
+		} else {
+			toolbar.style = "";
+			toolbar_open = false;
+		}
+	});
 }
 
 await Workspace.init();

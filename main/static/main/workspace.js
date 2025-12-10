@@ -16,9 +16,13 @@ export class Workspace {
 			open_speed: 0.1,
 			expand_amt: 1.2,
 		});
-		const rect = workspace.getBoundingClientRect()
-		grid_canvas.width = rect.width;
-		grid_canvas.height = rect.height;
+		const handle_resize = () => {
+			const rect = workspace.getBoundingClientRect()
+			grid_canvas.width = rect.width;
+			grid_canvas.height = rect.height;
+			this.draw_grid(this.offset.x, this.offset.y);
+		};
+		window.addEventListener("resize", handle_resize);
 
 		this.offset = { x: 0, y: 0 };
 		workspace.addEventListener("contextmenu", (e) => {
@@ -29,7 +33,7 @@ export class Workspace {
 		const drag_start = { x: 0, y: 0 };
 		let in_drag = false;
 		workspace.addEventListener("mousedown", (e) => {
-			if (!in_drag && e.button == 1) {
+			if (!in_drag && (e.button == 1 || e.button == 0 && e.ctrlKey)) {
 				workspace.style = "cursor: move;";
 				drag_start.x = e.x;
 				drag_start.y = e.y;
@@ -52,7 +56,8 @@ export class Workspace {
 				this.offset.y += (e.y - drag_start.y);
 			}
 		});
-		this.draw_grid(0, 0);
+
+		handle_resize();
 	}
 
 	draw_grid(x, y) {
