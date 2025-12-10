@@ -1,6 +1,6 @@
 import { CallbackPromise } from "./promise.js";
 
-const graph_div = document.getElementById("graph_div");
+const nodes_div = document.getElementById("nodes_div");
 
 export class Port {
 	/**
@@ -122,10 +122,14 @@ export class Edge {
 		this.hitbox_line.addEventListener("mouseenter", () => {
 			is_mouseover = true;
 			this.hitbox_line.setAttribute("stroke-opacity", "100%");
+			this.in_port.button().className = "selected_port";
+			this.out_port.button().className = "selected_port";
 		});
 		this.hitbox_line.addEventListener("mouseleave", () => {
 			is_mouseover = false;
 			this.hitbox_line.setAttribute("stroke-opacity", "0%");
+			this.in_port.button().className = "non_selected_port";
+			this.out_port.button().className = "non_selected_port";
 		});
 		this.hitbox_line.addEventListener("click", async () => {
 			if (is_mouseover) {
@@ -248,7 +252,7 @@ export class Node {
 		this.div.appendChild(this.init_content());
 		this.div.appendChild(this.init_footer());
 		this.init_drag();
-		graph_div.appendChild(this.div);
+		nodes_div.appendChild(this.div);
 
 		console.debug(`new ${this}`);
 	}
