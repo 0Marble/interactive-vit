@@ -84,7 +84,7 @@ export class MultiView extends graph.Node {
 			this.set_image(Math.floor(i / x), i % x, img, w, h);
 		}
 
-		this.finish_drawing();
+		this.finish_drawing(c, h, w);
 		this.on_visual_update();
 
 		return null;
@@ -103,9 +103,7 @@ export class MultiView extends graph.Node {
 		for (let j = 0; j < y; j++) {
 			const row = [];
 			for (let i = 0; i < x; i++) {
-				const canvas = document.createElement("canvas");
-				canvas.className = "multi_view_canvas";
-				row.push(canvas);
+				row.push(null);
 			}
 			this.canvases.push(row);
 		}
@@ -119,9 +117,11 @@ export class MultiView extends graph.Node {
 	 * @param {number} h 
 	 */
 	set_image(y, x, data, w, h) {
-		const canvas = this.canvases[y][x];
+		const canvas = document.createElement("canvas");
+		canvas.className = "multi_view_canvas";
 		canvas.width = w;
 		canvas.height = h;
+		this.canvases[y][x] = canvas;
 
 		const ctx = canvas.getContext("2d");
 		const img = ctx.createImageData(w, h);
@@ -129,18 +129,48 @@ export class MultiView extends graph.Node {
 		ctx.putImageData(img, 0, 0);
 	}
 
-	finish_drawing() {
+	finish_drawing(c, h, w) {
 		while (this.images_div.firstChild) this.images_div.firstChild.remove();
 
+		const dim_text_div = document.createElement("div");
+		const dim_text = document.createElement("p");
+		dim_text.textContent = `${c} channels, ${w} x ${h}`;
+		dim_text_div.className = "multi_view_dim_text";
+		dim_text_div.appendChild(dim_text);
+		this.images_div.appendChild(dim_text_div);
+
 		const table = document.createElement("table");
-		for (const row of this.canvases) {
+
+		const hover_div = document.createElement("div");
+		hover_div.className = "multi_view_coords_hover";
+		hover_div.style = "visibility: hidden;";
+		this.images_div.appendChild(hover_div);
+
+		for (let i = 0; i < this.canvases.length; i++) {
 			const tr = document.createElement("tr");
-			for (const img of row) {
+			const row = this.canvases[i];
+			for (let j = 0; j < row.length; j++) {
 				const td = document.createElement("td");
+				tr.appendChild(td);
+				const img = row[j];
+				if (img === null) continue;
+
 				const div = document.createElement("div");
+				div.className = "multi_view_canvas_div";
+
+				img.addEventListener("mouseenter", () => {
+					const rect = img.getBoundingClientRect();
+					hover_div.style = `visibility: visible; left: ${rect.left}px; top: ${rect.bottom}px;`;
+					hover_div.innerHTML = `<p>${i * row.length + j} Ch.<p>`;
+					img.style = "border: 2px solid yellow";
+				});
+				img.addEventListener("mouseleave", () => {
+					hover_div.style = "visibility: hidden;";
+					img.style = "";
+				});
+
 				div.appendChild(img);
 				td.appendChild(div);
-				tr.appendChild(td);
 			}
 			table.appendChild(tr);
 		}

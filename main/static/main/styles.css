@@ -165,13 +165,27 @@ body {
    overflow: auto;
 }
 
-.multi_view_div table {
-   table-layout: fixed;
-}
+.multi_view_div table { }
 
 .multi_view_canvas {
    min-width: 4em;
    min-height: 4em;
    margin: 0.5em;
+   border: solid 2px transparent;
+}
+
+.multi_view_coords_hover {
+   position: fixed;
+   background-color: white;
+}
+
+.multi_view_dim_text {
+   position: sticky;
+   top: 0;
+   left: 0;
+   background-color: #606060;
+}
+
+.multi_view_canvas_div {
    width: 100%;
 }
