@@ -260,6 +260,7 @@ export class Node {
 		let in_drag = false;
 		this.div.addEventListener("mousedown", (event) => {
 			if (!in_drag) {
+				event.stopPropagation();
 				delta.x = this.pos.x - event.x;
 				delta.y = this.pos.y - event.y;
 				in_drag = true;
@@ -268,12 +269,16 @@ export class Node {
 
 		this.div.addEventListener("mousemove", (event) => {
 			if (in_drag) {
+				event.stopPropagation();
 				this.move_to(event.x + delta.x, event.y + delta.y);
 			}
 		});
 
-		this.div.addEventListener("mouseup", () => {
-			in_drag = false;
+		this.div.addEventListener("mouseup", (event) => {
+			if (in_drag) {
+				event.stopPropagation();
+				in_drag = false;
+			}
 		});
 	}
 

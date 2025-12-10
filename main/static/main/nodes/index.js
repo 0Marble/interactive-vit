@@ -1,6 +1,6 @@
 import * as graph from "../graph.js";
 import * as gpu from "../gpu.js";
-import * as workspace from "../workspace.js";
+import { Workspace } from "../workspace.js";
 
 class IndexNode extends graph.Node {
 	constructor() {
@@ -175,7 +175,7 @@ export class SliceNode extends IndexNode {
 
 	static async register_factory() {
 		graph.Context.register_deserializer("slice", SliceNode.deserialize);
-		workspace.register_tool("Slice", async (x, y) => {
+		Workspace.register_tool("Slice", async (x, y) => {
 			const node = await SliceNode.create();
 			const rect = node.div.getBoundingClientRect();
 			node.move_to(x - rect.width * 0.5, y - rect.height * 0.5);
@@ -273,7 +273,7 @@ export class ShuffleNode extends IndexNode {
 
 	static async register_factory() {
 		graph.Context.register_deserializer("shuffle", ShuffleNode.deserialize);
-		workspace.register_tool("Shuffle", async (x, y) => {
+		Workspace.register_tool("Shuffle", async (x, y) => {
 			const node = await ShuffleNode.create();
 			const rect = node.div.getBoundingClientRect();
 			node.move_to(x - rect.width * 0.5, y - rect.height * 0.5);

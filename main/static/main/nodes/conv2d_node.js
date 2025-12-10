@@ -1,6 +1,6 @@
 import * as graph from "../graph.js";
 import * as gpu from "../gpu.js";
-import * as workspace from "../workspace.js";
+import { Workspace } from "../workspace.js";
 
 const WRK_SIZE = 16;
 const conv2d_src = `
@@ -200,7 +200,7 @@ export class Conv2dNode extends graph.Node {
 
 	static async register_factory() {
 		graph.Context.register_deserializer("conv2d", Conv2dNode.deserialize);
-		workspace.register_tool("Conv2d", async (x, y) => {
+		Workspace.register_tool("Conv2d", async (x, y) => {
 			const node = await Conv2dNode.create();
 			const rect = node.div.getBoundingClientRect();
 			node.move_to(x - rect.width * 0.5, y - rect.height * 0.5);

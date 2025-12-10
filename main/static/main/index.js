@@ -7,26 +7,24 @@ import { ImgViewNode } from "./nodes/img_view_node.js";
 import { Conv2dNode } from "./nodes/conv2d_node.js";
 import { SliceNode, ShuffleNode } from "./nodes/index.js";
 import { NetworkNode } from "./nodes/net_node.js";
-import { init_workspace } from "./workspace.js";
+import { Workspace } from "./workspace.js";
 
 await gpu.init();
 
 async function init_toolbar() {
 	const toolbar = document.getElementById("toolbar");
 
-	init_workspace();
-
 	toolbar.appendChild(await init_loader());
 	toolbar.appendChild(await init_saver());
 }
 
+await Workspace.init();
 await ImgSourceNode.register_factory();
 await ImgViewNode.register_factory();
 await Conv2dNode.register_factory();
 await SliceNode.register_factory();
 await ShuffleNode.register_factory();
 await NetworkNode.register_factory();
-
 
 await init_toolbar();
 

@@ -1,4 +1,4 @@
-const body = document.getElementById("graph_div");
+const body = document.getElementById("workspace");
 
 export class Picker {
 	static counter = 0;
