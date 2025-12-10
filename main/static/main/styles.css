@@ -189,3 +189,15 @@ body {
 .multi_view_canvas_div {
    width: 100%;
 }
+
+.input_fmt {
+   display: flex;
+   flex-direction: row;
+   white-space: nowrap;
+}
+
+.input_fmt > input {
+   border: none;
+   max-width: 5em;
+   background-color: #777777;
+}

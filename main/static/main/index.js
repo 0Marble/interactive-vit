@@ -1,5 +1,4 @@
 import * as gpu from "./gpu.js";
-import * as graph from "./graph.js";
 import { init_loader, init_saver } from "./load.js";
 
 import { ImgSourceNode } from "./nodes/img_source_node.js";
@@ -9,6 +8,7 @@ import { SliceNode, ShuffleNode } from "./nodes/index.js";
 import { NetworkNode } from "./nodes/net_node.js";
 import { Workspace } from "./workspace.js";
 import { MultiView } from "./nodes/multi_view.js";
+import { ConstNode } from "./nodes/const.js";
 
 await gpu.init();
 
@@ -38,6 +38,8 @@ await Conv2dNode.register_factory();
 await SliceNode.register_factory();
 await ShuffleNode.register_factory();
 await MultiView.register_factory();
+await ConstNode.register_factory();
+
 await NetworkNode.register_factory();
 
 await init_toolbar();

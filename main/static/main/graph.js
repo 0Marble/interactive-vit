@@ -56,6 +56,9 @@ export class Edge {
 		console.debug(`${this}.disconnect()`);
 		Context.ensure_not_eval();
 
+		this.in_port.button().className = "non_selected_port";
+		this.out_port.button().className = "non_selected_port";
+
 		this.in_port.node.outs.get(this.in_port.channel).delete(this);
 		this.out_port.node.ins.get(this.out_port.channel).delete(this);
 
@@ -583,8 +586,20 @@ export class Context {
 		 * @type {Map<Node,Promise<{node:Node,res:(Pinout|null)}>>}
 		 */
 		const worklist = new Map();
+		/**
+		 * @param {Node} node
+		 */
+		const run_work = async (node) => {
+			try {
+				const res = await node.eval_internal();
+				return { node, res };
+			} catch (err) {
+				console.error(err);
+				return { node, res: null };
+			}
+		};
 		for (const node of Context.nodes_to_eval) {
-			worklist.set(node, node.eval_internal().then(res => { return { node, res } }));
+			worklist.set(node, run_work(node));
 		}
 		Context.nodes_to_eval.clear();
 
@@ -598,7 +613,7 @@ export class Context {
 				const node = e.out_port.node;
 
 				if (!worklist.has(node)) {
-					worklist.set(node, node.eval_internal().then(res => { return { node, res } }));
+					worklist.set(node, run_work(node));
 				}
 			}
 		}
