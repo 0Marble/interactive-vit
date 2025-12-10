@@ -4,7 +4,6 @@
 - Stack node: `out = [a, b, c, d, ...]`. This is tricky, because we only support a pre-defined number of ports.
     1. "Fake" ports: create ports within the content div of the node. Hacky...
     2. Proper dynamic ports support: sounds possible, but there is a large surface for unforseen issues
-- Multi-view node: view all slices of a CHW tensor
 
 # Non-critical
 
@@ -19,6 +18,7 @@
 - 10.12.2025:
     1. Worked on frontend design. I am bad at it lol. Now the main workspace is draggable, and displays a grid to find yourself more easily. 
     I also removed the ugly toolbar at the top, replacing it with an ugly hamburger menu in the corner.
+    2. Multi-view node: displays all channels of a CHW tensor at once.
 
 - 08.12.2025:
     1. Node picker: create a node at the pointer location.
