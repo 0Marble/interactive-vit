@@ -29,8 +29,7 @@ body {
    height: 100%;
 }
 
-#grid_svg {
-   overflow: visible;
+#grid_canvas {
    width: 100%;
    height: 100%;
 }

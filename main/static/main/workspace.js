@@ -2,7 +2,10 @@ import { Picker } from "./picker.js";
 
 const workspace = document.getElementById("workspace");
 const graph_div = document.getElementById("graph_div");
-const grid_svg = document.getElementById("grid_svg");
+/**
+ * @type{HTMLCanvasElement}
+ */
+const grid_canvas = document.getElementById("grid_canvas");
 
 export class Workspace {
 	/**
@@ -13,6 +16,9 @@ export class Workspace {
 			open_speed: 0.1,
 			expand_amt: 1.2,
 		});
+		const rect = workspace.getBoundingClientRect()
+		grid_canvas.width = rect.width;
+		grid_canvas.height = rect.height;
 
 		this.offset = { x: 0, y: 0 };
 		workspace.addEventListener("contextmenu", (e) => {
@@ -50,7 +56,7 @@ export class Workspace {
 	}
 
 	draw_grid(x, y) {
-		while (grid_svg.firstChild) grid_svg.firstChild.remove();
+		grid_canvas.getContext("2d").clearRect(0, 0, grid_canvas.width, grid_canvas.height);
 
 		const spacing = 20;
 		const big = 5;
@@ -70,29 +76,22 @@ export class Workspace {
 
 	draw_grid_impl(left, top, spacing, color, width) {
 		const rect = workspace.getBoundingClientRect()
-		for (let x = left; x < rect.right; x += spacing) {
-			const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-			line.setAttribute("x1", x);
-			line.setAttribute("y1", 0);
-			line.setAttribute("x2", x);
-			line.setAttribute("y2", rect.height);
-			line.setAttribute("stroke", color);
-			line.setAttribute("stroke-width", width);
+		const ctx = grid_canvas.getContext("2d");
+		ctx.strokeStyle = color;
+		ctx.lineWidth = width;
+		ctx.beginPath();
 
-			grid_svg.appendChild(line);
+		for (let x = left; x < rect.right; x += spacing) {
+			ctx.moveTo(x, rect.top);
+			ctx.lineTo(x, rect.bottom);
 		}
 
 		for (let y = top; y < rect.bottom; y += spacing) {
-			const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-			line.setAttribute("x1", 0);
-			line.setAttribute("y1", y);
-			line.setAttribute("x2", rect.width);
-			line.setAttribute("y2", y);
-			line.setAttribute("stroke", color);
-			line.setAttribute("stroke-width", width);
-
-			grid_svg.appendChild(line);
+			ctx.moveTo(rect.left, y);
+			ctx.lineTo(rect.right, y);
 		}
+
+		ctx.stroke();
 	}
 
 	static instance = null;
