@@ -620,8 +620,15 @@ export class Context {
 		Context.nodes_to_eval.clear();
 	}
 
+	/**
+	 * @type {Map<string, {(obj:any) => Promise<Node>}
+	 */
 	static deserializers = new Map();
 
+	/**
+	 * @param {string} kind 
+	 * @param {(obj:any)=>Promise<Node>} fptr 
+	 */
 	static register_deserializer(kind, fptr) {
 		Context.deserializers.set(kind, fptr);
 	}
@@ -664,18 +671,16 @@ export class Context {
 		/**
 		 * @type{Promise<Node>[]}
 		 */
-		const promises = obj.nodes.map((data) => {
+		const promises = obj.nodes.map(async (data) => {
 			const { pos, instance } = data;
 			if (!Context.deserializers.has(instance.kind)) {
 				console.warn("unknown node type: ", instance);
 				return Promise.resolve(null);
 			} else {
 				const fptr = Context.deserializers.get(instance.kind);
-				return fptr(instance)
-					.then(node => {
-						node.move_to(pos.x, pos.y);
-						return node;
-					});
+				const node = await fptr(instance);
+				node.move_to(pos.x, pos.y);
+				return node;
 			}
 		});
 

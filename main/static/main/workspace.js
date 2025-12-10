@@ -13,6 +13,7 @@ export class Workspace {
 	 */
 	constructor() {
 		this.picker = new Picker({
+			radius: 200,
 			open_speed: 0.1,
 			expand_amt: 1.2,
 		});

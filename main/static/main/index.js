@@ -8,6 +8,7 @@ import { Conv2dNode } from "./nodes/conv2d_node.js";
 import { SliceNode, ShuffleNode } from "./nodes/index.js";
 import { NetworkNode } from "./nodes/net_node.js";
 import { Workspace } from "./workspace.js";
+import { MultiView } from "./nodes/multi_view.js";
 
 await gpu.init();
 
@@ -36,6 +37,7 @@ await ImgViewNode.register_factory();
 await Conv2dNode.register_factory();
 await SliceNode.register_factory();
 await ShuffleNode.register_factory();
+await MultiView.register_factory();
 await NetworkNode.register_factory();
 
 await init_toolbar();

@@ -158,3 +158,20 @@ body {
    background-color: rgb(0,0,0,0.5); 
    z-index: 100;
 }
+
+.multi_view_div {
+   max-width: 50em;
+   max-height: 50em;
+   overflow: auto;
+}
+
+.multi_view_div table {
+   table-layout: fixed;
+}
+
+.multi_view_canvas {
+   min-width: 4em;
+   min-height: 4em;
+   margin: 0.5em;
+   width: 100%;
+}
