@@ -22,6 +22,11 @@ export class Picker {
 			e.preventDefault();
 			this.close();
 		});
+		this.div.addEventListener("click", (e) => {
+			e.stopPropagation();
+			e.preventDefault();
+			this.close();
+		});
 
 		this.div.className = "picker";
 		body.appendChild(this.div);
