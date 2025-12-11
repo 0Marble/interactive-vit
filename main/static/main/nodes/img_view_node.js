@@ -63,17 +63,35 @@ export class ImgViewNode extends graph.Node {
 			const packet = await edge.read_packet();
 			if (!packet) return null;
 
-			if (!packet.is_Nd(2)) {
-				console.log(packet);
-				console.error(`Invalid input on ImgViewNode ${this}. Expected a 2d buffer, got ${packet.dims}`);
-				return null;
+			let err = false;
+			let h = 0;
+			let w = 0;
+			if (packet.dims.length === 2) {
+				[h, w] = packet.dims;
+				if (!size) {
+					size = { w, h };
+				} else if (size.w != w || size.h != h) {
+					console.error(`Inconsistent input sizes on ImgViewNode ${this}`);
+					return null;
+				}
+			} else if (packet.dims.length === 3 && edge.out_port.channel === "o") {
+				const c = packet.dims[0];
+				h = packet.dims[1];
+				w = packet.dims[2];
+				if (c !== 3) err = true;
+			} else {
+				err = true;
 			}
-			const w = packet.dims[1];
-			const h = packet.dims[0];
+
 			if (!size) {
 				size = { w, h };
 			} else if (size.w != w || size.h != h) {
 				console.error(`Inconsistent input sizes on ImgViewNode ${this}`);
+				return null;
+			}
+
+			if (err) {
+				console.error(`Invalid input on ImgViewNode ${this}. Expected a 2d buffer, got ${packet.dims}`);
 				return null;
 			}
 		}
@@ -98,6 +116,24 @@ export class ImgViewNode extends graph.Node {
 				case "R": cfg = new Uint32Array([0, 0x000000FF, 0, 0]); break;
 				case "G": cfg = new Uint32Array([8, 0x0000FF00, 0, 0]); break;
 				case "B": cfg = new Uint32Array([16, 0x00FF0000, 0, 0]); break;
+				case "o": {
+					for (let i = 0; i < 3; i++) {
+						const ch = gpu.Tensor.from_dims_and_data(4, [size.h, size.w]);
+						ch.data_buffer = input.get_data_buffer();
+						ch.strides = [input.strides[1], input.strides[2]];
+						ch.offset = input.offset + input.strides[0] * i;
+						const cfg = new Uint32Array([i * 8, 0xFF << (i * 8), 0, 0]);
+
+						this.merge.set_tensor(1, 0, ch);
+						this.merge.set_uniform("cfg", cfg.buffer);
+
+						this.merge.run([
+							Math.ceil(size.w / WRK_SIZE),
+							Math.ceil(size.h / WRK_SIZE),
+						]);
+					}
+					continue;
+				}
 			}
 
 			this.merge.set_tensor(1, 0, input);
@@ -126,7 +162,7 @@ export class ImgViewNode extends graph.Node {
 	 * @returns {Iterable<string>}
 	 */
 	input_names() {
-		return ["R", "G", "B"];
+		return ["R", "G", "B", "o"];
 	}
 
 	draw_content() {
