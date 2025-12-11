@@ -9,6 +9,7 @@ import { NetworkNode } from "./nodes/net_node.js";
 import { Workspace } from "./workspace.js";
 import { MultiView } from "./nodes/multi_view.js";
 import { ConstNode } from "./nodes/const.js";
+import { BinOp } from "./nodes/binop.js";
 
 await gpu.init();
 
@@ -39,6 +40,7 @@ await SliceNode.register_factory();
 await ShuffleNode.register_factory();
 await MultiView.register_factory();
 await ConstNode.register_factory();
+await BinOp.register_factory();
 
 await NetworkNode.register_factory();
 

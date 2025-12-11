@@ -113,7 +113,7 @@ export class ConstNode extends graph.Node {
 		Workspace.register_tool("Const", async (x, y) => {
 			const node = await ConstNode.create(0);
 			const rect = node.div.getBoundingClientRect();
-			node.move_to(x - rect.left, y - rect.top);
+			node.move_to(x - rect.width * 0.5, y - rect.height * 0.5);
 		});
 		graph.Context.register_deserializer("const", ConstNode.deserialize);
 	}

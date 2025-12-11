@@ -95,7 +95,6 @@ export class Kernel {
 	/**
 	 * @param {number} group 
 	 * @param {number} binding
-	 * @private
 	 */
 	set_binding(group, binding, buffer) {
 		if (!this.groups.has(group)) {
