@@ -6,16 +6,14 @@ import { Workspace } from "../workspace.js";
 export class ConstNode extends graph.Node {
 	/**
 	 * @param {number} value 
+	 * @param {number[]} dims 
 	 */
-	constructor(value) {
+	constructor(value, dims) {
 		super();
 		this.pre_init();
 
 		this.value = value;
-		/**
-		 * @type {number[]}
-		 */
-		this.dims = [1];
+		this.dims = dims;
 		/**
 		 * @type{gpu.Tensor}
 		 */
@@ -104,14 +102,14 @@ export class ConstNode extends graph.Node {
 	/**
 	 * @param {number} value 
 	 */
-	static async create(value) {
+	static async create(value, dims) {
 		await graph.Context.wait_for_not_in_eval();
-		return new ConstNode(value);
+		return new ConstNode(value, dims);
 	}
 
 	static async register_factory() {
 		Workspace.register_tool("Const", async (x, y) => {
-			const node = await ConstNode.create(0);
+			const node = await ConstNode.create(0, [1]);
 			const rect = node.div.getBoundingClientRect();
 			node.move_to(x - rect.width * 0.5, y - rect.height * 0.5);
 		});
@@ -119,7 +117,7 @@ export class ConstNode extends graph.Node {
 	}
 
 	static async deserialize(obj) {
-		const node = await ConstNode.create(+obj.value);
+		const node = await ConstNode.create(+obj.value, obj.dims);
 		return node;
 	}
 
@@ -127,6 +125,7 @@ export class ConstNode extends graph.Node {
 		return {
 			kind: "const",
 			value: this.value,
+			dims: this.dims,
 		};
 	}
 }
