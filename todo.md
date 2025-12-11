@@ -15,6 +15,9 @@
 
 # Log
 
+- 11.12.2025:
+    1. Binop node: do simple +-/* on same-sized tensors
+
 - 10.12.2025:
     1. Worked on frontend design. I am bad at it lol. Now the main workspace is draggable, and displays a grid to find yourself more easily. 
     I also removed the ugly toolbar at the top, replacing it with an ugly hamburger menu in the corner.
