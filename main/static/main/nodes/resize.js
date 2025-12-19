@@ -99,20 +99,18 @@ export class Resize extends graph.Node {
 
 	async eval() {
 		const edge = this.single_input("o");
-		if (!edge) return null;
+		if (!edge) throw new Error("input not connected");
 		/**
 		 * @type {gpu.Tensor}
 		 */
 		const input = await edge.read_packet();
-		if (!input) return null;
+		if (!input) throw new Error("could not compute input");
 		if (!input.is_Nd(3)) {
-			console.warn(`${this}: expected 3d rgb input, got ${input.dims}`);
-			return null;
+			throw new Error(`expected 3d rgb input, got ${input.dims}`);
 		}
 		const [c, h, w] = input.dims;
 		if (c != 3) {
-			console.warn(`${this}: expected 3d rgb input, got ${input.dims}`);
-			return null;
+			throw new Error(`expected 3d rgb input, got ${input.dims}`);
 		}
 
 		const rgba_input = gpu.Tensor.from_dims_and_data(4, [h, w]);

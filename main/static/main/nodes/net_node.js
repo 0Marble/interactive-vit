@@ -384,8 +384,7 @@ export class NetworkNode extends graph.Node {
 				cnt++;
 			}
 			if (!this.io.channel_access_valid("in", ch, cnt)) {
-				console.error(`${this}: invalid number of inputs on input "${ch}"`);
-				return null;
+				throw new Error(`invalid number of inputs on input "${ch}"`);
 			}
 		}
 

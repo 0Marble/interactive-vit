@@ -52,14 +52,15 @@ export class MultiView extends graph.Node {
 	 */
 	async eval() {
 		const edge = this.single_input("o");
-		if (edge === null) return null;
+		if (edge === null) throw new Error("input not connected");
 		/**
 		 * @type {gpu.Tensor}
 		 */
 		const input = await edge.read_packet();
-		if (input === null) return null;
+		if (input === null) throw new Error("could not compute input");
 
 		this.kernel.set_tensor(0, 0, input);
+		if (!input.is_Nd(3)) throw new Error(`Expected a 3d [C,H,W] input, got ${input.dims}`);
 
 		const [c, h, w] = input.dims;
 		const output = gpu.Tensor.from_dims_and_data(4, [c, h, w]);

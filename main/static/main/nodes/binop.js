@@ -108,21 +108,20 @@ export class BinOp extends graph.Node {
 
 	async eval() {
 		const edge_a = this.single_input("a");
-		if (!edge_a) return null;
+		if (!edge_a) throw new Error("input 'a' not connected");
 		const edge_b = this.single_input("b");
-		if (!edge_b) return null;
+		if (!edge_b) throw new Error("input 'b' not connected");
 
 		/**
 		 * @type {gpu.Tensor}
 		 */
 		const a = await edge_a.read_packet();
-		if (!a) return null;
+		if (!a) throw new Error("could not compute 'a'");
 		const b = await edge_b.read_packet();
-		if (!b) return null;
+		if (!b) throw new Error("could not compute 'b'");
 
 		if (!arr_eql(a.dims, b.dims)) {
-			console.warn("error: binop dimension mismatch: a:", a.dims, "b:", b.dims);
-			return null;
+			throw new Error(`error: binop dimension mismatch: a: ${a.dims}, b: ${b.dims}`);
 		}
 
 		let elem_cnt = 1;

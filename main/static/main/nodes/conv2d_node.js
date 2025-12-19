@@ -160,17 +160,16 @@ export class Conv2dNode extends graph.Node {
 	 */
 	async eval() {
 		const edge = this.single_input("o");
-		if (edge === null) return null;
+		if (edge === null) throw new Error("input not connected");
 
 		/**
 		 * @type {gpu.Tensor | null}
 		 */
 		const input = await edge.read_packet();
-		if (input === null) return null;
+		if (input === null) throw new Error("could not compute input");
 		const size = input.as_2d_size();
 		if (!size) {
-			console.error(`Only 2d convolutions supported (node ${this.format()})`);
-			return null;
+			throw new Error(`Only 2d convolutions supported, got ${input.dims}`);
 		}
 
 		const out_size = {

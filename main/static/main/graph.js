@@ -198,7 +198,8 @@ export class Node {
 	}
 
 	/**
-	 * @returns {Promise<Pinout | null>}
+	 * Throw for errors
+	 * @returns {Promise<Pinout>}
 	 */
 	async eval() {
 		throw new Error(`${this}.eval(): unimplemented`);
@@ -466,18 +467,37 @@ export class Node {
 
 	/**
 	 * Dont use this!
-	 * @returns {Promise<Pinout|null>}
+	 * @returns {Promise<Pinout | null>}
 	 */
 	async eval_internal() {
 		Context.ensure_in_eval();
+
+		this.status_hover.clear_content();
 		if (this.eval_state === null) {
 			console.debug(`${this}.eval()`);
 			this.eval_state = this.eval();
+			this.status_text.textContent = "evaluating...";
+			this.status_text.style = "color: black;";
 		}
-		return await this.eval_state;
+
+		try {
+			const res = await this.eval_state;
+			this.status_text.textContent = "Eval ok!";
+			this.status_text.style = "color: LawnGreen;";
+			return res;
+		} catch (err) {
+			this.status_text.textContent = "Error!";
+			this.status_text.style = "color: red;";
+			this.status_hover.set_content(err);
+		}
+		return null;
 	}
 
 	invalidate() {
+		this.status_hover.clear_content();
+		this.status_text.textContent = "waiting for input";
+		this.status_text.style = "color: black;";
+
 		console.debug(`${this}.invalidate()`);
 		Context.ensure_not_eval();
 		this.eval_state = null;
@@ -598,10 +618,7 @@ export class Context {
 		 */
 		const run_work = async (node) => {
 			try {
-				node.status_hover.clear_content();
 				const res = await node.eval_internal();
-				node.status_text.textContent = "Eval ok!";
-				node.status_text.style = "color: LawnGreen;";
 				return { node, res };
 			} catch (err) {
 				node.status_text.textContent = "eval error!";

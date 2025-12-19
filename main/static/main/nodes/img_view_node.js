@@ -71,8 +71,7 @@ export class ImgViewNode extends graph.Node {
 				if (!size) {
 					size = { w, h };
 				} else if (size.w != w || size.h != h) {
-					console.error(`Inconsistent input sizes on ImgViewNode ${this}`);
-					return null;
+					throw new Error(`inconsistent input sizes on`);
 				}
 			} else if (packet.dims.length === 3 && edge.out_port.channel === "o") {
 				const c = packet.dims[0];
@@ -86,13 +85,11 @@ export class ImgViewNode extends graph.Node {
 			if (!size) {
 				size = { w, h };
 			} else if (size.w != w || size.h != h) {
-				console.error(`Inconsistent input sizes on ImgViewNode ${this}`);
-				return null;
+				throw new Error(`inconsistent input sizes`);
 			}
 
 			if (err) {
-				console.error(`Invalid input on ImgViewNode ${this}. Expected a 2d buffer, got ${packet.dims}`);
-				return null;
+				throw new Error(`Invalid input. Expected a 2d buffer, got ${packet.dims}`);
 			}
 		}
 

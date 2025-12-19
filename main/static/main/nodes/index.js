@@ -24,20 +24,16 @@ class IndexNode extends graph.Node {
 
 	async eval() {
 		const e = this.single_input("o");
-		if (!e) return null;
+		if (!e) throw new Error("input not connected");
 		/**
 		 * @type {gpu.Tensor}
 		 */
 		const input = await e.read_packet();
-		if (!input) return null;
+		if (!input) throw new Error("could not compute input");
 		if (!input.is_Nd(this.dim_cnt)) {
-			console.error(
-				`IndexNode(${this}): invalid input size, got`,
-				input.dims.length,
-				"expected",
-				this.dim_cnt,
+			throw new Error(
+				`invalid input size, got ${input.dims.length}, expected ${this.dim_cnt}`
 			);
-			return null;
 		}
 
 		const output = new gpu.Tensor(4, 0);
