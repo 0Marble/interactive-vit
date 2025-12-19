@@ -296,6 +296,7 @@ export class Node {
 		const left = document.createElement("div");
 		left.className = "node_header_left";
 		left.appendChild(this.init_port_group("in", this.input_names()));
+		left.append(`Node ${this.index}`);
 		header.appendChild(left);
 
 		const right = document.createElement("div");

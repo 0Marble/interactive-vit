@@ -3,12 +3,14 @@ import django.http as http
 from django.template import loader
 from django.conf import settings
 from django.views.static import serve
+from main.model import Model
 
 import logging
 import os
 import importlib
 import sys
 import traceback
+import json
 
 from main.message import Message
 
@@ -21,6 +23,7 @@ def setup_model_objects():
     for model_name in os.listdir(models_dir):
         path = os.path.join(models_dir, model_name)
         model_path = os.path.join(path, "model.py")
+        graph_path = os.path.join(path, "graph.json")
 
         if not os.path.isfile(model_path): 
             continue
@@ -34,8 +37,12 @@ def setup_model_objects():
             sys.modules[model_name] = module
             spec.loader.exec_module(module)
 
-            model_obj = module.Model()
+            model_obj: Model = module.Model()
             model_objects[model_name] = model_obj
+            if not os.path.exists(graph_path):
+                json_obj = model_obj.generate_graph()
+                with open(graph_path, 'w') as f:
+                    json.dump(json_obj, f)
 
             logger.error("Registered model '%s'", model_name)
         except Exception as err:
@@ -95,7 +102,7 @@ def model_compute(request: http.HttpRequest, model_name: str, node_name: str):
         return http.HttpResponse(res)
     except Exception as e:
         logger.error(traceback.format_exc())
-        return http.HttpResponseBadRequest(str(e))
+        return http.HttpResponseBadRequest(f"{node_name} : {str(e)}")
 
 def model_description(req: http.HttpRequest, model_name: str, node_name: str):
     try:
