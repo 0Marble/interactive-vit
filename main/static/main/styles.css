@@ -174,11 +174,6 @@ body {
    border: solid 2px transparent;
 }
 
-.multi_view_coords_hover {
-   position: fixed;
-   background-color: white;
-}
-
 .multi_view_dim_text {
    position: sticky;
    top: 0;
@@ -200,4 +195,10 @@ body {
    border: none;
    max-width: 5em;
    background-color: #777777;
+}
+
+.hover_div {
+   position: fixed;
+   background-color: white;
+   min-width: 3em;
 }

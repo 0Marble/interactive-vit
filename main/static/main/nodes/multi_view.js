@@ -1,6 +1,7 @@
 import * as graph from "../graph.js";
 import * as gpu from "../gpu.js";
 import { Workspace } from "../workspace.js";
+import { Hover } from "../hover.js";
 
 const WRK_SIZE = 4;
 
@@ -141,11 +142,6 @@ export class MultiView extends graph.Node {
 
 		const table = document.createElement("table");
 
-		const hover_div = document.createElement("div");
-		hover_div.className = "multi_view_coords_hover";
-		hover_div.style = "visibility: hidden;";
-		this.images_div.appendChild(hover_div);
-
 		for (let i = 0; i < this.canvases.length; i++) {
 			const tr = document.createElement("tr");
 			const row = this.canvases[i];
@@ -157,17 +153,11 @@ export class MultiView extends graph.Node {
 
 				const div = document.createElement("div");
 				div.className = "multi_view_canvas_div";
-
-				img.addEventListener("mouseenter", () => {
-					const rect = img.getBoundingClientRect();
-					hover_div.style = `visibility: visible; left: ${rect.left}px; top: ${rect.bottom}px;`;
-					hover_div.innerHTML = `<p>${i * row.length + j} Ch.<p>`;
-					img.style = "border: 2px solid yellow";
-				});
-				img.addEventListener("mouseleave", () => {
-					hover_div.style = "visibility: hidden;";
-					img.style = "";
-				});
+				const hover = new Hover();
+				const idx_p = document.createElement("p");
+				idx_p.textContent = i * row.length + j + " Ch.";
+				hover.set_content(idx_p);
+				hover.attatch(img);
 
 				div.appendChild(img);
 				td.appendChild(div);
