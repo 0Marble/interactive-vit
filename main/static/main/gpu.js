@@ -146,7 +146,13 @@ export class Tensor {
 		this.elem_size = elem_size;
 		this.elem_cnt = elem_cnt;
 		this.byte_size = elem_size * elem_cnt;
+		/**
+		 * @type {number[]}
+		 */
 		this.dims = [elem_cnt];
+		/**
+		 * @type {number[]}
+		 */
 		this.strides = [1];
 		this.offset = 0;
 
