@@ -1,3 +1,4 @@
+import { Hover } from "./hover.js";
 import { CallbackPromise } from "./promise.js";
 
 const nodes_div = document.getElementById("nodes_div");
@@ -251,6 +252,11 @@ export class Node {
 			this.outs.set(ch, new Set());
 		}
 
+		this.status_text = document.createElement("span");
+		this.status_text.textContent = "waiting for input";
+		this.status_hover = new Hover();
+		this.status_hover.attatch(this.status_text);
+
 		this.div.appendChild(this.init_header());
 		this.div.appendChild(this.init_content());
 		this.div.appendChild(this.init_footer());
@@ -326,7 +332,7 @@ export class Node {
 		const right = document.createElement("div");
 		right.className = "node_footer_right";
 		right.appendChild(this.init_port_group("out", this.output_names()));
-		footer.appendChild(right);
+		footer.append(this.status_text, right);
 
 		return footer;
 	}
@@ -592,9 +598,15 @@ export class Context {
 		 */
 		const run_work = async (node) => {
 			try {
+				node.status_hover.clear_content();
 				const res = await node.eval_internal();
+				node.status_text.textContent = "Eval ok!";
+				node.status_text.style = "color: LawnGreen;";
 				return { node, res };
 			} catch (err) {
+				node.status_text.textContent = "eval error!";
+				node.status_text.style = "color: red;";
+				node.status_hover.set_content(err);
 				console.error(err);
 				return { node, res: null };
 			}

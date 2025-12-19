@@ -13,8 +13,12 @@ export class Hover {
 	 * @param {HTMLElement | string} content
 	 */
 	set_content(content) {
-		while (this.div.firstChild) this.div.firstChild.remove();
+		this.clear_content();
 		this.div.append(content);
+	}
+
+	clear_content() {
+		while (this.div.firstChild) this.div.firstChild.remove();
 	}
 
 	/**
