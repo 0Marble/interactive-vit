@@ -5,6 +5,7 @@ import math
 class Model:
     def __init__(self, model: torch.nn.Module, prefix: str):
         self.model = model
+        self.model.eval()
         self.prefix = prefix
 
         self.node_names = []

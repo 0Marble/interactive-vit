@@ -286,6 +286,7 @@ class Message {
 
 			console.assert(buffer_offset === offsets[t.i + 1]);
 		}
+		console.debug("Message.encode(): msg size: ", byte_size);
 
 		return buffer;
 	}
@@ -393,17 +394,12 @@ export class NetworkNode extends graph.Node {
 		if (this.params_obj) {
 			url = url + "?" + new URLSearchParams(this.params_obj).toString();
 		}
-		try {
-			await msg.send(url);
+		await msg.send(url);
 
-			for (let i = 0; i < msg.get_tensor_count(); i++) {
-				const t = msg.get_nth_tensor(i);
-				const ch = msg.get_nth_channel(i);
-				pinout.set(ch, t);
-			}
-		} catch (err) {
-			console.error(err);
-			return null;
+		for (let i = 0; i < msg.get_tensor_count(); i++) {
+			const t = msg.get_nth_tensor(i);
+			const ch = msg.get_nth_channel(i);
+			pinout.set(ch, t);
 		}
 
 		return pinout;

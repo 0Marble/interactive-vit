@@ -104,7 +104,6 @@ export class Edge {
 		const x2 = out_rect.left + out_rect.width / 2 - edges_rect.left;
 		const y2 = out_rect.top + out_rect.height / 2 - edges_rect.top;
 
-
 		this.edge_line = document.createElementNS("http://www.w3.org/2000/svg", "line");
 		this.edge_line.setAttribute("x1", x1);
 		this.edge_line.setAttribute("y1", y1);
@@ -224,7 +223,7 @@ export class Node {
 
 		/**
 		 * Do not use this!
-		 * @type{null|Promise<Pinout|null>}
+		 * @type{null|Promise<Pinout>}
 		 */
 		this.eval_state = null;
 
@@ -263,6 +262,18 @@ export class Node {
 		this.div.appendChild(this.init_footer());
 		this.init_drag();
 		nodes_div.appendChild(this.div);
+
+		/**
+		 * @type {Map<string, Hover>}
+		 */
+		this.port_hovers = new Map();
+		for (const ch of this.output_names()) {
+			const hover = new Hover();
+			this.port_hovers.set(ch, hover);
+			const port = new Port(this, "out", ch);
+			const button = port.button();
+			hover.attatch(button);
+		}
 
 		console.debug(`new ${this}`);
 	}
@@ -478,17 +489,27 @@ export class Node {
 			this.eval_state = this.eval();
 			this.status_text.textContent = "evaluating...";
 			this.status_text.style = "color: black;";
+			for (const ch of this.output_names()) {
+				const hover = this.port_hovers.get(ch);
+				hover.clear_content();
+			}
 		}
 
 		try {
 			const res = await this.eval_state;
 			this.status_text.textContent = "Eval ok!";
 			this.status_text.style = "color: LawnGreen;";
+			for (const ch of this.output_names()) {
+				const tensor = res.get(ch);
+				const hover = this.port_hovers.get(ch);
+				hover.set_content(`[${tensor.dims}]`);
+			}
 			return res;
 		} catch (err) {
 			this.status_text.textContent = "Error!";
 			this.status_text.style = "color: red;";
 			this.status_hover.set_content(err);
+			console.error(err);
 		}
 		return null;
 	}

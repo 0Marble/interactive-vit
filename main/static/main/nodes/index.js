@@ -36,7 +36,7 @@ class IndexNode extends graph.Node {
 			);
 		}
 
-		const output = new gpu.Tensor(4, 0);
+		const output = new gpu.Tensor(4, 1);
 		output.dims = [];
 		output.strides = [];
 		output.data_buffer = input.data_buffer;
@@ -53,6 +53,7 @@ class IndexNode extends graph.Node {
 		for (const [dim, order] of this.free_dims) {
 			output.dims[order] = input.dims[dim];
 			output.strides[order] = input.strides[dim];
+			output.elem_cnt *= input.dims[dim];
 		}
 
 		const pinout = new graph.Pinout();
