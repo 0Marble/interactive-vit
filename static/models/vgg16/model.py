@@ -2,6 +2,8 @@ from torchvision.models import vgg16
 import torch
 import torchvision
 
+import math
+
 import main.model
 from main.message import Message
 
@@ -13,6 +15,21 @@ class Model(main.model.Model):
 
     def name(self):
         return "vgg16"
+
+    def generate_graph(self):
+        json_obj = super().generate_graph()
+        i = json_obj["nodes"].__len__();
+        w = int(math.sqrt(i))
+
+        json_obj["nodes"].append({
+            "instance":{"kind":"category", "cats": self.weights.meta["categories"]},
+            "pos":{"x": (i % w) * 200, "y": int(i / w) * 200}
+        })
+        json_obj["edges"].append({
+            "in_port": {"node": i - 1, "channel": "o"},
+            "out_port": {"node": i, "channel": "o"}
+        })
+        return json_obj
 
     def list_node_names(self):
         l = super().list_node_names()

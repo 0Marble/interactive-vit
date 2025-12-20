@@ -202,3 +202,9 @@ body {
    background-color: white;
    min-width: 3em;
 }
+
+.category_div {
+   overflow: auto;
+   max-height: 10em;
+   white-space: nowrap;
+}

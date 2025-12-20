@@ -12,6 +12,7 @@ import { ConstNode } from "./nodes/const.js";
 import { BinOp } from "./nodes/binop.js";
 import { Noise } from "./nodes/noise.js";
 import { Resize } from "./nodes/resize.js";
+import { Category } from "./nodes/category.js";
 
 await gpu.init();
 
@@ -47,6 +48,7 @@ await Noise.register_factory();
 await Resize.register_factory();
 
 await NetworkNode.register_factory();
+await Category.register_factory();
 
 await init_toolbar();
 
