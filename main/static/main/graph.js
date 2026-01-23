@@ -40,7 +40,7 @@ export class Edge {
 			return null;
 		}
 
-		if (!Node.dfa(out_port.node, (node) => node !== in_port.node)) {
+		if (!Node.dfs(out_port.node, (node) => node !== in_port.node)) {
 			console.warn("new edge cancelled: loop detected");
 			return null;
 		}
@@ -525,7 +525,7 @@ export class Node {
 	}
 
 	invalidate_with_descendants() {
-		Node.dfa(this, (node) => { node.invalidate(); return true; });
+		Node.dfs(this, (node) => { node.invalidate(); return true; });
 	}
 
 	toString() {
@@ -545,7 +545,7 @@ export class Node {
 	 * @param {(node:Node)=>boolean} visitor 
 	 * @returns {boolean}
 	 */
-	static dfa(start, visitor) {
+	static dfs(start, visitor) {
 		const stack = [start];
 		const visited = new Set([start]);
 

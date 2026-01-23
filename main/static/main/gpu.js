@@ -250,7 +250,78 @@ export class Tensor {
 	from_cpu(data) {
 		Runtime.device.queue.writeBuffer(this.get_data_buffer(), 0, data);
 	}
+
+	copy_into(other) {
+		const a = this;
+		const b = other;
+
+		const a_strides = Tensor.from_dims_and_data(4, [a.dims.length], new Uint32Array(a.strides));
+		const b_strides = Tensor.from_dims_and_data(4, [b.dims.length], new Uint32Array(b.strides));
+		const dims = Tensor.from_dims_and_data(4, [a.dims.length], new Uint32Array(a.dims));
+
+		copy_kernel.set_binding(0, 0, a.get_data_buffer());
+		copy_kernel.set_binding(0, 1, a_strides.get_data_buffer());
+		copy_kernel.set_binding(0, 2, b.get_data_buffer());
+		copy_kernel.set_binding(0, 3, b_strides.get_data_buffer());
+		copy_kernel.set_binding(0, 4, dims.get_data_buffer());
+
+		const cfg = [a.dims.length, a.offset, b.offset, a.elem_cnt]
+		copy_kernel.set_uniform("cfg", new Uint32Array(cfg).buffer);
+
+		copy_kernel.run([Math.ceil(a.elem_cnt / WRK_SIZE)]);
+
+		return other;
+	}
+
+	/**
+	 * @returns {Tensor}
+	 */
+	contiguous() {
+		const res = Tensor.from_dims_and_data(this.elem_size, this.dims);
+		return this.copy_into(res);
+	}
 }
+
+const WRK_SIZE = 64;
+const copy_kernel_src = ` 
+@group(0) @binding(0) var<storage, read> a: array<f32>;
+@group(0) @binding(1) var<storage, read> a_strides: array<u32>;
+@group(0) @binding(2) var<storage, read_write> b: array<f32>;
+@group(0) @binding(3) var<storage, read> b_strides: array<u32>;
+@group(0) @binding(4) var<storage, read> dims: array<u32>;
+@group(0) @binding(5) var<uniform> cfg: Config;
+
+struct Config {
+	dim_cnt: u32,
+	a_offset: u32,
+	b_offset: u32,
+	elem_cnt: u32,
+}
+
+override WRK_SIZE = ${WRK_SIZE};
+@compute @workgroup_size(WRK_SIZE)
+fn main(@builtin(global_invocation_id) id: vec3u) {
+	if (id.x > cfg.elem_cnt) {
+		return;
+	}
+
+	var a_idx = cfg.a_offset;
+	var b_idx = cfg.b_offset;
+	var k = id.x;
+
+	for (var i: u32 = 0; i < cfg.dim_cnt; i++) {
+		var j = cfg.dim_cnt - 1 - i;
+		var x = k % dims[j];
+		a_idx += x * a_strides[j];
+		b_idx += x * b_strides[j];
+		k /= dims[j];
+	}
+
+	b[b_idx] = a[a_idx];
+}
+`;
+
+let copy_kernel = null;
 
 export async function init() {
 	if (!navigator.gpu) {
@@ -272,6 +343,7 @@ export async function init() {
 	console.debug("Initialized WebGPU");
 
 	Runtime.device = device;
+	copy_kernel = new Kernel(copy_kernel_src);
 }
 
 

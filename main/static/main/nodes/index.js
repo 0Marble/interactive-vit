@@ -32,7 +32,7 @@ class IndexNode extends graph.Node {
 		if (!input) throw new Error("could not compute input");
 		if (!input.is_Nd(this.dim_cnt)) {
 			throw new Error(
-				`invalid input size, got ${input.dims.length}, expected ${this.dim_cnt}`
+				`invalid input dims, got ${input.dims.length}, expected ${this.dim_cnt}`
 			);
 		}
 
