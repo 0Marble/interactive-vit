@@ -321,6 +321,9 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
 }
 `;
 
+/**
+ * @type {Kernel}
+ */
 let copy_kernel = null;
 
 export async function init() {
@@ -343,7 +346,7 @@ export async function init() {
 	console.debug("Initialized WebGPU");
 
 	Runtime.device = device;
-	copy_kernel = new Kernel(copy_kernel_src);
+	copy_kernel = new Kernel(copy_kernel_src, [new UniformBinding("cfg", 0, 5, 4 * 4)]);
 }
 
 

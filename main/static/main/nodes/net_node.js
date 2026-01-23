@@ -22,6 +22,7 @@ class Request {
 	 */
 	async process() {
 		const buf = await this.encode();
+		console.debug(buf);
 		const resp = await fetch("compute", {
 			body: buf,
 			method: "POST",
@@ -39,7 +40,9 @@ class Request {
 
 	/**
 	 * @returns {Promise<ArrayBuffer>}
-	 * [ header | utf-8 json | data block 0 | ... ]
+	 * also fills out this.mapping
+	 *
+	 * [ header | utf-8 json | padding_to_4 | data block 0 | ... ]
 	 * header: 
 	 *   - byte size: u32
 	 *   - magic: u32
@@ -48,8 +51,9 @@ class Request {
 	 * json: {
 	 *   nodes: [{endpoint: string, params: obj}],
 	 *   edges: [{
-	 *      // (tensor xor node) present
-	 *      in_port: {?node: number, ?tensor: number, channel: string},  
+	 *      // (tensor xor in_port) present
+	 *      ?tensor: number,
+	 *      ?in_port: {node: number, channel: string},  
 	 *      out_port: {node: number, channel: string},
 	 *   }],
 	 * }
@@ -59,7 +63,113 @@ class Request {
 	 *   - dims: [u32],
 	 *   - data: [f32],
 	 */
-	async encode() { }
+	async encode() {
+		const obj = { nodes: [], edges: [] };
+		/**
+		 * @type {[graph.Edge]}
+		 */
+		const input_edges = [];
+
+		for (const node of this.nodes) {
+			this.mapping.set(node, obj.nodes.length);
+
+			obj.nodes.push({
+				endpoint: node.endpoint,
+				params: node.params_obj,
+			});
+		}
+
+		for (const node of this.nodes) {
+			for (const e of node.inputs()) {
+				const prev = e.in_port.node;
+				if (prev instanceof NetworkNode) {
+					obj.edges.push({
+						in_port: {
+							node: this.mapping.get(prev),
+							channel: e.in_port.channel,
+						},
+						out_port: {
+							node: this.mapping.get(node),
+							channel: e.out_port.channel,
+						},
+					});
+				} else {
+					obj.edges.push({
+						tensor: input_edges.length,
+						out_port: {
+							node: this.mapping.get(node),
+							channel: e.out_port.channel,
+						},
+					});
+					input_edges.push(e);
+				}
+			}
+		}
+
+		const tensors = await Promise.all(input_edges.map(async (e) => {
+			/**
+			 * @type {gpu.Tensor}
+			 */
+			const tensor = await e.read_packet();
+			if (!tensor) throw new Error(`could not compute ${e.in_port.channel}`);
+			return Request.encode_tensor(tensor.contiguous());
+		}));
+
+		const json = new TextEncoder().encode(JSON.stringify(obj));
+		let byte_size = json.length + 4 * 4;
+		const padding = align_next(byte_size, 4) - byte_size;
+		byte_size += padding;
+		let tensor_size = 0;
+		for (const t of tensors) tensor_size += t.byteLength;
+		byte_size += tensor_size;
+
+		console.debug(`creating net_node subgraph request, size=${byte_size} (16 | ${json.length} | ${padding} | ${tensor_size})`);
+
+		const buf = new ArrayBuffer(byte_size);
+		const view = new DataView(buf);
+		view.setUint32(0, byte_size, true);
+		view.setUint32(4, 0x69babe69, true);
+		view.setUint32(8, tensors.length, true);
+		view.setUint32(12, json.length, true);
+
+		new Uint8Array(buf, 16, json.length).set(json);
+
+		let byte_offset = 16 + json.length + padding;
+		for (const t of tensors) {
+			new Uint8Array(buf, byte_offset, t.byteLength).set(new Uint8Array(t));
+			byte_offset += t.byteLength;
+		}
+
+		return buf;
+	}
+
+	/**
+	 * @param {gpu.Tensor} tensor 
+	 * @returns {Promise<ArrayBuffer>}
+	 * - byte size: u32
+	 * - dim cnt: u32,
+	 * - dims: [u32],
+	 * - data: [f32],
+	 */
+	static async encode_tensor(tensor) {
+		const data = await tensor.to_cpu();
+		const dims = new Uint32Array(tensor.dims)
+		const size = 4 + 4 + dims.byteLength + data.byteLength;
+		const buf = new ArrayBuffer(size);
+		const view = new DataView(buf);
+		view.setUint32(0, size, true);
+		view.setUint32(4, tensor.dims.length, true);
+		new Uint8Array(buf, 8, dims.byteLength).set(new Uint8Array(dims.buffer));
+		new Uint8Array(buf, 8 + dims.byteLength, data.byteLength).set(new Uint8Array(data));
+
+		return buf;
+	}
+}
+
+function align_next(offset, align) {
+	const m = offset % align;
+	if (m === 0) return offset;
+	return offset + align - m;
 }
 
 class Response {
