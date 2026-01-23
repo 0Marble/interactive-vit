@@ -9,10 +9,7 @@ from main.message import Message
 logger = logging.getLogger(__name__)
 
 def description(request):
-    return http.JsonResponse([
-        {"kind":"in", "channel":"o", "access":"1"},
-        {"kind":"out", "channel":"o", "access":"*"},
-    ], safe=False)
+    return http.JsonResponse({"ins": ["o"], "outs": ["o"]}, safe=False)
 
 def contents(request: http.HttpRequest):
     params = request.GET
