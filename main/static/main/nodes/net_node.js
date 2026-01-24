@@ -183,7 +183,7 @@ class Response {
 		 * @type {[Map<string, gpu.Tensor>]}
 		 */
 		this.outputs = [];
-		for (_ of this.mapping) this.outputs.push(new Map());
+		for (const _ of this.mapping) this.outputs.push(new Map());
 
 		this.decode(buf);
 	}
@@ -195,7 +195,10 @@ class Response {
 	 */
 	get_output(node, channel) {
 		const idx = this.mapping.get(node);
-		return this.outputs[idx].get(channel);
+		if (idx === undefined) throw new Error("no such node");
+		const res = this.outputs[idx].get(channel)
+		if (res === undefined) throw new Error(`could not compute ${channel}`);
+		return res;
 	}
 
 	/**
@@ -217,11 +220,11 @@ class Response {
 	decode(buf) {
 		const view = new DataView(buf)
 		let offset = 0;
-		const byte_size = view.getUint32((offset += 4) - 4);
-		const magic = view.getUint32((offset += 4) - 4);
+		const byte_size = view.getUint32((offset += 4) - 4, true);
+		const magic = view.getUint32((offset += 4) - 4, true);
 		if (magic != 0xdeadbeef) throw new Error("invalid response magic");
-		const data_cnt = view.getUint32((offset += 4) - 4);
-		const json_size = view.getUint32((offset += 4) - 4);
+		const data_cnt = view.getUint32((offset += 4) - 4, true);
+		const json_size = view.getUint32((offset += 4) - 4, true);
 
 		const json_utf8 = new Uint8Array(buf, offset, json_size);
 		offset += json_size;
@@ -230,12 +233,16 @@ class Response {
 		 * @type {[{node: number, channel: string}]}
 		 */
 		const arr = JSON.parse(json_str);
-		offset = align_next(offset, 4);
+		const padding = align_next(offset, 4) - offset;
+		offset += padding;
+		console.debug(`response: ${byte_size} (16 | ${data_cnt} | ${json_size} | ${padding})`)
+		console.debug(`json: ${json_str}`);
 
 		for (let i = 0; i < data_cnt; i++) {
+
 			const start = offset;
-			const block_size = view.getUint32((offset += 4) - 4);
-			const dim_cnt = view.getUint32((offset += 4) - 4);
+			const block_size = view.getUint32((offset += 4) - 4, true);
+			const dim_cnt = view.getUint32((offset += 4) - 4, true);
 			const dims = new Uint32Array(buf, offset, dim_cnt)
 			offset += dim_cnt * 4;
 
@@ -243,7 +250,9 @@ class Response {
 			for (const x of dims) elem_cnt *= x;
 			const data = new Float32Array(buf, offset, elem_cnt);
 			offset += elem_cnt * 4;
-			const tensor = gpu.Tensor.from_dims_and_data(4, dims, data.buffer);
+			console.debug(`tensor[${i}]: start=${start}, byte_size=${block_size}, dims=${dims}`);
+
+			const tensor = gpu.Tensor.from_dims_and_data(4, dims, data);
 
 			const { node, channel } = arr[i];
 			this.outputs[node].set(channel, tensor);
@@ -288,9 +297,9 @@ class Context {
 		 */
 		const response = await pending;
 		const res = new graph.Pinout();
-		for (const e of node.outputs()) {
-			const tensor = response.get_output(node, e.in_port.channel);
-			res.set(e.in_port.channel, tensor);
+		for (const ch of node.output_names()) {
+			const tensor = response.get_output(node, ch);
+			res.set(ch, tensor);
 		}
 		return res;
 	}
@@ -398,6 +407,7 @@ export class NetworkNode extends graph.Node {
 		context.ensure_pending(this);
 		const res = await context.pending.get(this);
 		context.pending.delete(this);
+		console.debug(res)
 		return res;
 	}
 

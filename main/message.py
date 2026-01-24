@@ -1,6 +1,7 @@
 import array
 import io
 import json
+import os
 import torch
 import logging
 
@@ -55,4 +56,50 @@ class Request:
             tensors.append(t)
 
 
+class Response:
+    def __init__(self):
+        self.outputs = {}
 
+    def set_output(self, node: int, channel: str, t: torch.Tensor):
+        if node not in self.outputs: self.outputs[node] = {}
+        self.outputs[node][channel] = t
+
+    def encode(self) -> bytes:
+        writer = io.BytesIO()
+
+        json_obj = []
+        tensors: list[torch.Tensor] = []
+        for node in self.outputs.keys():
+            outputs = self.outputs[node]
+            for channel in outputs.keys():
+                json_obj.append({"node": node, "channel": channel})
+                tensors.append(outputs[channel])
+        
+        json_utf8 = json.dumps(json_obj).encode()
+
+        writer.write(int.to_bytes(0, 4, "little")) # byte_size to patch
+        writer.write(int.to_bytes(0xdeadbeef, 4, "little")) # magic
+        writer.write(int.to_bytes(len(tensors), 4, "little")) # block_cnt 
+        writer.write(int.to_bytes(len(json_utf8), 4, "little")) # json size
+
+        writer.write(json_utf8)
+        offset = writer.tell()
+        writer.seek(align_next(offset, 4) - offset, os.SEEK_CUR)
+
+        for t in tensors:
+            dims = array.array("I")
+            dims.fromlist(list(t.shape))
+            data = array.array("f")
+            data.frombytes(t.numpy().tobytes())
+            block_size = 4 + 4 + len(dims) * 4 + len(data) * 4
+
+            writer.write(int.to_bytes(block_size, 4, "little"))
+            writer.write(int.to_bytes(len(dims), 4, "little"))
+            writer.write(dims.tobytes())
+            writer.write(data.tobytes())
+
+        byte_size = writer.tell()
+        writer.seek(0)
+        writer.write(int.to_bytes(byte_size, 4, "little"))
+
+        return writer.getbuffer().tobytes()

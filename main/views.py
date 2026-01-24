@@ -11,7 +11,9 @@ import sys
 import traceback
 import json
 
-from main.message import Request
+import torch
+
+from main.message import Request, Response
 
 logger = logging.getLogger(__name__)
 
@@ -58,4 +60,8 @@ def load_graph(request: http.HttpRequest):
 def compute(http_req: http.HttpRequest):
     req = Request()
     req.decode(http_req.body)
-    return http.HttpResponseBadRequest(b"todo")
+
+    resp = Response()
+    resp.set_output(0, "o", torch.eye(100))
+
+    return http.HttpResponse(resp.encode())
