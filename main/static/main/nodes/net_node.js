@@ -179,6 +179,12 @@ class Response {
 	 */
 	constructor(mapping, buf) {
 		this.mapping = mapping;
+		/**
+		 * @type {[Map<string, gpu.Tensor>]}
+		 */
+		this.outputs = [];
+		for (_ of this.mapping) this.outputs.push(new Map());
+
 		this.decode(buf);
 	}
 
@@ -187,23 +193,65 @@ class Response {
 	 * @param {string} channel 
 	 * @returns {gpu.Tensor}
 	 */
-	get_output(node, channel) { }
+	get_output(node, channel) {
+		const idx = this.mapping.get(node);
+		return this.outputs[idx].get(channel);
+	}
 
 	/**
 	 * [header | json | data block 0 | ...]
 	 * header:
 	 *   - byte size: u32,
-	 *   - magic: u32,
+	 *   - magic: u32 = 0xdeadbeef,
 	 *   - data block count: u32,
 	 *   - json block byte size: u32,
-	 * json: {[{node: number, channel: number}]} // element with idx i is tensor in block i
+	 * json: {[{node: number, channel: string}]} // element with idx i is tensor in block i
 	 * data block: (same as Request.encode)
 	 *   - byte size: u32
 	 *   - dim cnt: u32,
 	 *   - dims: [u32],
 	 *   - data: [f32],
+	 *
+	 * @param {ArrayBuffer} buf
 	 */
-	decode() { }
+	decode(buf) {
+		const view = new DataView(buf)
+		let offset = 0;
+		const byte_size = view.getUint32((offset += 4) - 4);
+		const magic = view.getUint32((offset += 4) - 4);
+		if (magic != 0xdeadbeef) throw new Error("invalid response magic");
+		const data_cnt = view.getUint32((offset += 4) - 4);
+		const json_size = view.getUint32((offset += 4) - 4);
+
+		const json_utf8 = new Uint8Array(buf, offset, json_size);
+		offset += json_size;
+		const json_str = new TextDecoder().decode(json_utf8);
+		/**
+		 * @type {[{node: number, channel: string}]}
+		 */
+		const arr = JSON.parse(json_str);
+		offset = align_next(offset, 4);
+
+		for (let i = 0; i < data_cnt; i++) {
+			const start = offset;
+			const block_size = view.getUint32((offset += 4) - 4);
+			const dim_cnt = view.getUint32((offset += 4) - 4);
+			const dims = new Uint32Array(buf, offset, dim_cnt)
+			offset += dim_cnt * 4;
+
+			let elem_cnt = 1;
+			for (const x of dims) elem_cnt *= x;
+			const data = new Float32Array(buf, offset, elem_cnt);
+			offset += elem_cnt * 4;
+			const tensor = gpu.Tensor.from_dims_and_data(4, dims, data.buffer);
+
+			const { node, channel } = arr[i];
+			this.outputs[node].set(channel, tensor);
+
+			console.assert(block_size + start === offset);
+		}
+		console.assert(byte_size === offset);
+	}
 }
 
 class Context {
