@@ -1,89 +1,58 @@
 import array
 import io
+import json
 import torch
 import logging
 
 logger = logging.getLogger(__name__)
 
-class Message:
+def align_next(offset, align):
+    m = offset % align
+    if m == 0: return offset
+    return offset + align - m
+
+class Request:
     def __init__(self):
-        # self.tensors: Map<string, torch.tensor>
-        self.tensors = {}
-
-    def clear(self):
-        self.tensors = {}
-
-    def get(self, channel: str) -> torch.tensor:
-        return self.tensors[channel]
-
-    def set(self, channel, t: torch.tensor):
-        self.tensors[channel] = t
-    
-    def encode(self):
-        network = "big"
-        writer = io.BytesIO()
-        writer.write(int.to_bytes(len(self.tensors), 4, network))
-
-        for channel in self.tensors.keys():
-            t: torch.tensor = self.tensors[channel]
-
-            data = array.array('f')
-            data.frombytes(t.numpy().tobytes())
-
-            dims = array.array('I')
-            dims.fromlist(list(t.shape))
-
-            strides = array.array('I')
-            strides.fromlist(list(t.stride()))
-
-            offset = t.storage_offset()
-
-            enc = channel.encode(encoding="utf8")
-            writer.write(int.to_bytes(len(enc), 4, network))
-            writer.write(enc)
-
-            padding = len(enc) % 4
-            if padding != 0: padding = 4 - padding
-            writer.write(bytes(padding))
-
-            writer.write(int.to_bytes(len(dims), 4, network))
-            writer.write(dims.tobytes())
-            writer.write(strides.tobytes())
-            writer.write(int.to_bytes(offset, 4, network))
-            writer.write(data.tobytes())
-
-        return writer.getbuffer()
+        pass
 
     def decode(self, b: bytes):
-        network = "big"
-        self.tensors = {}
-
         reader = io.BytesIO(b)
-        num_packets = int.from_bytes(reader.read(4), byteorder=network, signed=False)
+        byte_size = int.from_bytes(reader.read(4), "little")
+        assert int.from_bytes(reader.read(4), "little") == 0x69babe69
+        block_cnt = int.from_bytes(reader.read(4), "little")
+        json_size = int.from_bytes(reader.read(4), "little")
 
-        for i in range(0, num_packets):
-            channel_len = int.from_bytes(reader.read(4), byteorder=network, signed=False)
-            channel = reader.read(channel_len).decode(encoding="utf8")
-            
-            padding = channel_len % 4
-            if padding != 0: padding = 4 - padding
-            reader.read(padding)
+        json_str = reader.read(json_size).decode(encoding="utf-8")
+        json_obj = json.loads(json_str)
 
-            n_dim = int.from_bytes(reader.read(4), byteorder=network, signed=False)
-            dims = array.array('I')
-            dims.frombytes(reader.read(4 * n_dim))
-            strides = array.array('I')
-            strides.frombytes(reader.read(4 * n_dim))
-            offset = int.from_bytes(reader.read(4), byteorder=network, signed=False)
+        offset = reader.tell()
+        padding = align_next(offset, 4) - offset
+        _ = reader.read(padding) 
+        assert reader.tell() % 4 == 0
+
+        logger.info("decode message: size=%d, json_size=%d, padding=%d, block_cnt=%d", byte_size, json_size, padding, block_cnt)
+        logger.info("json: %s", json_str)
+
+        tensors = []
+        for i in range(0, block_cnt):
+            start = reader.tell()
+
+            block_size = int.from_bytes(reader.read(4), "little")
+            dim_cnt = int.from_bytes(reader.read(4), "little")
+
+            dims = array.array("I")
+            dims.frombytes(reader.read(4 * dim_cnt))
 
             elem_cnt = 1
-            for d in dims: elem_cnt *= d
+            for x in dims: elem_cnt *= x
 
-            data = array.array('f')
+            data = array.array("f")
             data.frombytes(reader.read(4 * elem_cnt))
+            logger.info("tensor %d: size=%d, dim_cnt=%d dims=%s", i, block_size, dim_cnt, f"{dims.tolist()}")
 
-            t = torch.tensor(data)
-            t = torch.as_strided(t, dims.tolist(), strides.tolist(), storage_offset=offset)
-            self.tensors[channel] = t;
+            assert start + block_size == reader.tell()
+            t = torch.tensor(data).reshape(dims.tolist())
+            tensors.append(t)
+
 
 
