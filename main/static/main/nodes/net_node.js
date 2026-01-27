@@ -5,6 +5,21 @@ import * as csrf from "../csrf.js";
 import { Workspace } from "../workspace.js";
 
 
+class TargettedError extends Error {
+	/**
+	 * @param {NetworkNode} target 
+	 * @param {string} message 
+	 */
+	constructor(target, message) {
+		super(message);
+		this.target = target;
+	}
+
+	toString() {
+		return this.message;
+	}
+}
+
 class Request {
 	/**
 	 * @param {Set<NetworkNode>} nodes 
@@ -83,7 +98,10 @@ class Request {
 			for (const ch of node.input_names()) {
 				let has_input = false;
 				for (const e of node.inputs(ch)) {
-					if (has_input) throw new Error(`too many inputs on ${ch}, only 1 expected`);
+					if (has_input) throw new TargettedError(
+						node,
+						`too many inputs on ${ch}, only 1 expected`,
+					);
 					has_input = true;
 
 					const prev = e.in_port.node;
@@ -110,7 +128,7 @@ class Request {
 					}
 				}
 
-				if (!has_input) throw new Error(`missing input ${ch}`);
+				if (!has_input) throw new TargettedError(node, `missing input ${ch}`);
 			}
 		}
 
@@ -119,7 +137,10 @@ class Request {
 			 * @type {gpu.Tensor}
 			 */
 			const tensor = await e.read_packet();
-			if (!tensor) throw new Error(`could not compute node_${e.in_port.node.index}:${e.in_port.channel}`);
+			if (!tensor) throw new TargettedError(
+				e.out_port.node,
+				`could not compute ${e.out_port.channel}`,
+			);
 			return Request.encode_tensor(tensor.contiguous());
 		}));
 
@@ -205,9 +226,9 @@ class Response {
 	 */
 	get_output(node, channel) {
 		const idx = this.mapping.get(node);
-		if (idx === undefined) throw new Error("no such node");
+		if (idx === undefined) throw new TargettedError(node, "no such node");
 		const res = this.outputs[idx].get(channel)
-		if (res === undefined) throw new Error(`could not compute ${channel}`);
+		if (res === undefined) throw new TargettedError(node, `could not compute ${channel}`);
 		return res;
 	}
 
@@ -295,7 +316,9 @@ class Context {
 		const pending = req.process();
 
 		for (const node of nodes) {
-			console.assert(!this.pending.has(node));
+			if (this.pending.has(node)) {
+				console.error("node", node, " is already pending! this should be unreachable");
+			}
 			this.pending.set(node, Context.eval_impl(node, pending));
 		}
 	}
@@ -423,7 +446,11 @@ export class NetworkNode extends graph.Node {
 		try {
 			res = await context.pending.get(this);
 		} catch (e) {
-			eval_error = e;
+			if (e instanceof TargettedError && e.target === this) {
+				eval_error = e;
+			} else {
+				eval_error = new Error("eval error upstream");
+			}
 		}
 		context.pending.delete(this);
 

@@ -658,8 +658,6 @@ export class Context {
 			const { node, res } = await Promise.race(worklist.values());
 			worklist.delete(node);
 
-			if (!res) continue;
-
 			for (const e of node.outputs()) {
 				const node = e.out_port.node;
 
