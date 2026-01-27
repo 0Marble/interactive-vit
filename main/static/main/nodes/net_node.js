@@ -80,29 +80,37 @@ class Request {
 		}
 
 		for (const node of this.nodes) {
-			for (const e of node.inputs()) {
-				const prev = e.in_port.node;
-				if (prev instanceof NetworkNode) {
-					obj.edges.push({
-						in_port: {
-							node: this.mapping.get(prev),
-							channel: e.in_port.channel,
-						},
-						out_port: {
-							node: this.mapping.get(node),
-							channel: e.out_port.channel,
-						},
-					});
-				} else {
-					obj.edges.push({
-						tensor: input_edges.length,
-						out_port: {
-							node: this.mapping.get(node),
-							channel: e.out_port.channel,
-						},
-					});
-					input_edges.push(e);
+			for (const ch of node.input_names()) {
+				let has_input = false;
+				for (const e of node.inputs(ch)) {
+					if (has_input) throw new Error(`too many inputs on ${ch}, only 1 expected`);
+					has_input = true;
+
+					const prev = e.in_port.node;
+					if (prev instanceof NetworkNode) {
+						obj.edges.push({
+							in_port: {
+								node: this.mapping.get(prev),
+								channel: e.in_port.channel,
+							},
+							out_port: {
+								node: this.mapping.get(node),
+								channel: e.out_port.channel,
+							},
+						});
+					} else {
+						obj.edges.push({
+							tensor: input_edges.length,
+							out_port: {
+								node: this.mapping.get(node),
+								channel: e.out_port.channel,
+							},
+						});
+						input_edges.push(e);
+					}
 				}
+
+				if (!has_input) throw new Error(`missing input ${ch}`);
 			}
 		}
 
@@ -111,7 +119,7 @@ class Request {
 			 * @type {gpu.Tensor}
 			 */
 			const tensor = await e.read_packet();
-			if (!tensor) throw new Error(`could not compute ${e.in_port.channel}`);
+			if (!tensor) throw new Error(`could not compute node_${e.in_port.node.index}:${e.in_port.channel}`);
 			return Request.encode_tensor(tensor.contiguous());
 		}));
 
@@ -122,8 +130,6 @@ class Request {
 		let tensor_size = 0;
 		for (const t of tensors) tensor_size += t.byteLength;
 		byte_size += tensor_size;
-
-		console.debug(`creating net_node subgraph request, size=${byte_size} (16 | ${json.length} | ${padding} | ${tensor_size})`);
 
 		const buf = new ArrayBuffer(byte_size);
 		const view = new DataView(buf);
@@ -139,6 +145,10 @@ class Request {
 			new Uint8Array(buf, byte_offset, t.byteLength).set(new Uint8Array(t));
 			byte_offset += t.byteLength;
 		}
+
+		console.debug("request:");
+		console.debug(`size=${byte_size} (16 | ${json.length} | ${padding} | ${tensor_size})`);
+		console.debug("json:", obj);
 
 		return buf;
 	}
@@ -235,11 +245,12 @@ class Response {
 		const arr = JSON.parse(json_str);
 		const padding = align_next(offset, 4) - offset;
 		offset += padding;
-		console.debug(`response: ${byte_size} (16 | ${data_cnt} | ${json_size} | ${padding})`)
-		console.debug(`json: ${json_str}`);
+
+		console.debug("response:");
+		console.debug(`size=${byte_size} (16 | ${data_cnt} | ${json_size} | ${padding})`)
+		console.debug("json:", arr);
 
 		for (let i = 0; i < data_cnt; i++) {
-
 			const start = offset;
 			const block_size = view.getUint32((offset += 4) - 4, true);
 			const dim_cnt = view.getUint32((offset += 4) - 4, true);
@@ -260,6 +271,8 @@ class Response {
 			console.assert(block_size + start === offset);
 		}
 		console.assert(byte_size === offset);
+
+		console.debug("outputs: ", this.outputs);
 	}
 }
 
@@ -405,9 +418,16 @@ export class NetworkNode extends graph.Node {
 	}
 	async eval() {
 		context.ensure_pending(this);
-		const res = await context.pending.get(this);
+		let eval_error = null;
+		let res = null;
+		try {
+			res = await context.pending.get(this);
+		} catch (e) {
+			eval_error = e;
+		}
 		context.pending.delete(this);
-		console.debug(res)
+
+		if (eval_error !== null) throw eval_error;
 		return res;
 	}
 
