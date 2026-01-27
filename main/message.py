@@ -74,8 +74,13 @@ class Request:
 
 
 class Response:
-    def __init__(self):
+    def __init__(self, graph: Graph):
         self.outputs = {}
+        
+        for node in graph.nodes:
+            pinout = node.get_pinout()
+            for ch, t in pinout.pinout.items():
+                self.set_output(node.index, ch, t)
 
     def set_output(self, node: int, channel: str, t: torch.Tensor):
         if node not in self.outputs: self.outputs[node] = {}

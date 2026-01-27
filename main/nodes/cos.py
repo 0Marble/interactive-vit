@@ -1,24 +1,37 @@
-from django.shortcuts import render
-import django.http as http
-from django.template import loader
-import logging
+from typing import Dict, Tuple
+
 import torch
+from main.context import NodeKind
+from main.graph import Pinout
 
-from main.message import Request
+class CosNode(NodeKind):
+    def __init__(self):
+        super().__init__("cos")
 
-logger = logging.getLogger(__name__)
+    def decode_params(self, params: Dict[str, str]) -> Tuple[float, float]:
+        a = 1.0
+        if "A" in params: a = float(params["A"])
+        b = 0.0
+        if "b" in params: b = float(params["b"])
+        return a, b
 
-def description(request):
-    return http.JsonResponse({"ins": ["o"], "outs": ["o"]}, safe=False)
+    def contents(self, params: Dict[str, str]) -> str:
+        a, b = self.decode_params(params)
+        return f"cos({a}x+{b})"
 
-def contents(request: http.HttpRequest):
-    params = request.GET
-    A = params.get("A") 
-    if A is None: A = 1.0
-    else: A = float(A)
+    def io(self, params: Dict[str, str]) -> Dict:
+        _ = params
+        return {"ins": ["o"], "outs": ["o"]}
 
-    b = params.get("b")
-    if b is None: b = 0.0
-    else: b = float(b)
+    def compute(self, params: Dict[str, str], inputs: Pinout) -> Pinout:
+        a, b = self.decode_params(params)
+        x = inputs.get("o")
+        if x is None: raise Exception("missing input: o")
+        y = torch.cos(a * x + b)
 
-    return http.HttpResponse(f"cos({A}x+{b})")
+        res = Pinout()
+        res.set("o", y)
+        return res
+
+def nodes():
+    return [CosNode()]

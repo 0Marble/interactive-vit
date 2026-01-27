@@ -397,7 +397,7 @@ export class NetworkNode extends graph.Node {
 		this.net_div.innerHTML = "<p>Loading...</p>"
 
 		try {
-			let url = `node/${this.endpoint}/contents`;
+			let url = `contents/${this.endpoint}`;
 			if (this.params_obj) {
 				url = url + "?" + new URLSearchParams(this.params_obj).toString();
 			}
@@ -471,7 +471,7 @@ export class NetworkNode extends graph.Node {
 	static async create(endpoint, params_obj) {
 		await graph.Context.wait_for_not_in_eval();
 
-		let url = `node/${endpoint}/description`;
+		let url = `description/${endpoint}`;
 		if (params_obj) {
 			url = url + "?" + new URLSearchParams(params_obj).toString();
 		}

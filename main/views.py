@@ -14,6 +14,7 @@ import json
 import torch
 
 from main.message import Request, Response
+from main.context import context
 
 logger = logging.getLogger(__name__)
 
@@ -57,16 +58,30 @@ def load_graph(request: http.HttpRequest):
         return http.HttpResponseBadRequest(str(e).encode())
 
 
+def description(http_req: http.HttpRequest, name: str) -> http.HttpResponse:
+    try: 
+        json_obj = context().get_node(name).io(http_req.GET)
+        return http.JsonResponse(json_obj, safe=False)
+    except Exception as e:
+        return http.HttpResponseBadRequest(str(e).encode())
+
+def contents(http_req: http.HttpRequest, name: str) -> http.HttpResponse:
+    try: 
+        return http.HttpResponse(context().get_node(name).contents(http_req.GET).encode())
+    except Exception as e:
+        return http.HttpResponseBadRequest(str(e).encode())
+
 def compute(http_req: http.HttpRequest):
-    req = Request()
-    req.decode(http_req.body)
-    resp = Response()
+    try:
+        req = Request()
+        req.decode(http_req.body)
+        logger.debug("%s", req.graph.__str__())
+        context().compute(req.graph)
+        logger.debug("%s", req.graph.__str__())
 
-    for node in req.graph.order():
-        x = node.inputs["o"].tensor
-        assert x is not None
-        y = torch.cos(x)
-        if "o" in node.outputs: node.outputs["o"].tensor = y
-        resp.set_output(node.index, "o", y)
+        resp = Response(req.graph)
+        return http.HttpResponse(resp.encode())
+    except Exception as e:
+        logger.error(e)
+        return http.HttpResponseBadRequest(str(e).encode())
 
-    return http.HttpResponse(resp.encode())

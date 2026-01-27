@@ -8,8 +8,6 @@ import os
 import logging
 import sys
 
-import main.nodes.cos as cos
-
 logger = logging.getLogger(__name__)
 
 urlpatterns = [
@@ -17,6 +15,6 @@ urlpatterns = [
     django_path("list_graphs", views.list_graphs, name="list-graphs"),
     django_path("load_graph", views.load_graph, name="load-graph"),
     django_path("compute", views.compute, name="compute"),
-    django_path("node/cos/description", cos.description, name="cos-description"),
-    django_path("node/cos/contents", cos.contents, name="cos-contents"),
+    django_path("description/<str:name>", views.description, name="description"),
+    django_path("contents/<str:name>", views.contents, name="contents"),
 ]
