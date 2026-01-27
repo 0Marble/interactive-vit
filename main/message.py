@@ -5,7 +5,10 @@ import os
 import torch
 import logging
 
+from main.graph import Graph
+
 logger = logging.getLogger(__name__)
+
 
 def align_next(offset, align):
     m = offset % align
@@ -14,7 +17,7 @@ def align_next(offset, align):
 
 class Request:
     def __init__(self):
-        pass
+        self.graph = Graph()
 
     def decode(self, b: bytes):
         reader = io.BytesIO(b)
@@ -34,7 +37,7 @@ class Request:
         logger.info("decode message: size=%d, json_size=%d, padding=%d, block_cnt=%d", byte_size, json_size, padding, block_cnt)
         logger.info("json: %s", json_str)
 
-        tensors = []
+        tensors: list[torch.Tensor] = []
         for i in range(0, block_cnt):
             start = reader.tell()
 
@@ -54,6 +57,20 @@ class Request:
             assert start + block_size == reader.tell()
             t = torch.tensor(data).reshape(dims.tolist())
             tensors.append(t)
+
+        for node_json in json_obj["nodes"]:
+            _ = self.graph.add_node(node_json["endpoint"], node_json["params"])
+
+        for edge_json in json_obj["edges"]:
+            tgt_node = self.graph.nodes[edge_json["out_port"]["node"]]
+            tgt_ch = edge_json["out_port"]["channel"]
+
+            if "tensor" in edge_json:
+                _ = self.graph.add_input(tensors[edge_json["tensor"]], tgt_node, tgt_ch)
+            else:
+                src_node = self.graph.nodes[edge_json["in_port"]["node"]]
+                src_ch = edge_json["in_port"]["channel"]
+                _ = self.graph.connect(src_node, src_ch, tgt_node, tgt_ch)
 
 
 class Response:

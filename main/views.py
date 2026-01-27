@@ -60,8 +60,13 @@ def load_graph(request: http.HttpRequest):
 def compute(http_req: http.HttpRequest):
     req = Request()
     req.decode(http_req.body)
-
     resp = Response()
-    resp.set_output(0, "o", torch.eye(100))
+
+    for node in req.graph.order():
+        x = node.inputs["o"].tensor
+        assert x is not None
+        y = torch.cos(x)
+        if "o" in node.outputs: node.outputs["o"].tensor = y
+        resp.set_output(node.index, "o", y)
 
     return http.HttpResponse(resp.encode())
