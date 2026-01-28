@@ -33,5 +33,5 @@ class CosNode(NodeKind):
         res.set("o", y)
         return res
 
-def nodes():
+def instances():
     return [CosNode()]

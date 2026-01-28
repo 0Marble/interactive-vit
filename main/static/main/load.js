@@ -27,9 +27,7 @@ function init_load_from_buitlin(modal, name) {
 	const button = document.createElement("button");
 	button.textContent = name;
 	button.addEventListener("click", async () => {
-		const params = new URLSearchParams({ name });
-		const url = "load_graph?" + params.toString();
-
+		const url = "load_graph/" + name;
 		const resp = await fetch(url);
 		const json = await resp.json();
 		await graph.Context.wait_for_not_in_eval();
